@@ -8,6 +8,24 @@ using UnityEditor;
 /// </summary>
 public class TyreDebug : MonoBehaviour
 {
+    // GL描画用のマテリアル
+    private static Material lineMaterial;
+    
+    // GL描画用のマテリアルを初期化
+    private static void CreateLineMaterial()
+    {
+        if (lineMaterial != null)
+            return;
+            
+        // Unity内部のシェーダーを使用
+        Shader shader = Shader.Find("Hidden/Internal-Colored");
+        lineMaterial = new Material(shader);
+        lineMaterial.hideFlags = HideFlags.HideAndDontSave;
+        lineMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        lineMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        lineMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        lineMaterial.SetInt("_ZWrite", 0);
+    }
     // デバッグ表示用のパラメータ
     public bool ShowDebugInfo = true;
     public float DebugTextScale = 0.01f;
@@ -134,6 +152,164 @@ public class TyreDebug : MonoBehaviour
         }
     }
     
+    // GL.LINESを使用して円を描画するメソッド
+    private void DrawCircle(Vector2 center, float radius, Color color, int segments = 36)
+    {
+        GL.Begin(GL.LINES);
+        GL.Color(color);
+        
+        float angleStep = 2f * Mathf.PI / segments;
+        for (int i = 0; i < segments; i++)
+        {
+            float angle1 = i * angleStep;
+            float angle2 = (i + 1) * angleStep;
+            
+            GL.Vertex3(center.x + Mathf.Cos(angle1) * radius, center.y + Mathf.Sin(angle1) * radius, 0);
+            GL.Vertex3(center.x + Mathf.Cos(angle2) * radius, center.y + Mathf.Sin(angle2) * radius, 0);
+        }
+        
+        GL.End();
+    }
+    
+    // GL.LINESを使用して線を描画するメソッド
+    private void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1.0f)
+    {
+        GL.Begin(GL.LINES);
+        GL.Color(color);
+        
+        // 基本の線
+        GL.Vertex3(start.x, start.y, 0);
+        GL.Vertex3(end.x, end.y, 0);
+        
+        // 太さを出すために複数の線を描画
+        if (thickness > 1.0f)
+        {
+            Vector2 perpendicular = new Vector2(-(end.y - start.y), end.x - start.x).normalized * (thickness * 0.5f);
+            
+            for (int i = 1; i <= thickness; i++)
+            {
+                float offset = i * 0.5f;
+                
+                // 上側の線
+                GL.Vertex3(start.x + perpendicular.x * offset, start.y + perpendicular.y * offset, 0);
+                GL.Vertex3(end.x + perpendicular.x * offset, end.y + perpendicular.y * offset, 0);
+                
+                // 下側の線
+                GL.Vertex3(start.x - perpendicular.x * offset, start.y - perpendicular.y * offset, 0);
+                GL.Vertex3(end.x - perpendicular.x * offset, end.y - perpendicular.y * offset, 0);
+            }
+        }
+        
+        GL.End();
+    }
+    
+    // OnRenderObjectは全てのカメラのレンダリング後に呼ばれる
+    private void OnRenderObject()
+    {
+        if (!ShowDebugInfo) return;
+        
+        // マテリアルの初期化
+        CreateLineMaterial();
+        lineMaterial.SetPass(0);
+        
+        // スクリーン座標系で描画するための設定
+        GL.PushMatrix();
+        GL.LoadPixelMatrix();
+        
+        // 摩擦円の描画（OnGUIで計算した値を使用）
+        DrawFrictionCircleGL();
+        
+        GL.PopMatrix();
+    }
+    
+    // GLを使用した摩擦円の描画処理
+    private void DrawFrictionCircleGL()
+    {
+        if (mFrictionCirclePow <= 0) return;
+        
+        // 画面上の固定位置を計算
+        Vector2 screenPos;
+        
+        // 前輪は右上、後輪は右下に固定表示
+        if (IsFrontWheel)
+        {
+            // 前輪の場合は右上
+            screenPos = new Vector2(Screen.width - 300, 300);
+        }
+        else
+        {
+            // 後輪の場合は右下
+            screenPos = new Vector2(Screen.width - 300, 500);
+        }
+        
+        // GL描画用に座標を調整（GUIとGLの座標系の違いを考慮）
+        // GUIの場合、Y座標はScreen.height - screenPos.yとなる
+        // GLの場合、そのままのY座標を使用する
+        Vector2 glScreenPos = new Vector2(screenPos.x, Screen.height - screenPos.y);
+        
+        // 摩擦円の半径を計算（画面サイズに合わせて調整）
+        // 半径を3倍に拡大して視認性を向上
+        float circleRadius = Mathf.Sqrt(mFrictionCirclePow) * 6.0f;
+        
+        // 摩擦円の中心位置（スクリーン座標を使用）
+        // OnGUIと同じ表示位置に調整
+        Vector2 circleCenter = new Vector2(glScreenPos.x + 150, glScreenPos.y - 200);
+        
+        // 摩擦力の大きさを摩擦円の半径に対する比率で計算
+        float forceRatio = 0f;
+        if (mFrictionCirclePow > 0.01f && FrictionForce.magnitude > 0.01f)
+        {
+            forceRatio = FrictionForce.magnitude / mFrictionCirclePow;
+        }
+        
+        // 摩擦限界を超えたかどうかに基づいて色を変更
+        Color circleColor;
+        if (forceRatio >= 1.0f)
+        {
+            // 摩擦限界を超えた場合は赤よりのオレンジ
+            circleColor = new Color(1.0f, 0.5f, 0.0f, 0.8f); // オレンジ
+        }
+        else
+        {
+            // 通常は緑
+            circleColor = new Color(0.2f, 0.8f, 0.2f, 0.8f); // 緑
+        }
+        
+        // 摩擦円の描画
+        DrawCircle(circleCenter, circleRadius, circleColor);
+        
+        // 現在の摩擦力を円内に描画
+        if (FrictionForce.magnitude > 0.01f)
+        {
+            // 摩擦力をバイクのローカル座標系に変換
+            Vector3 localForce = transform.InverseTransformDirection(FrictionForce);
+            
+            // 摩擦力のベクトルを計算
+            // GLの座標系では左右および上下の向きを反転させる必要がある
+            Vector2 forceVector = new Vector2(
+                -localForce.x / mFrictionCirclePow * circleRadius, // X軸が前後方向（反転）
+                -localForce.z / mFrictionCirclePow * circleRadius  // Z軸が左右方向（反転）
+            );
+            
+            // 力のベクトルを描画（線を細くする）
+            DrawLine(circleCenter, circleCenter + forceVector, new Color(1.0f, 0.2f, 0.2f, 0.8f), 1.5f);
+        }
+        
+        // スリップアングルの表示
+        if (Mathf.Abs(SlipAngle) > 0.001f)
+        {
+            // スリップアングルの方向を計算（バイクのローカル座標系で）
+            float slipRad = SlipAngle; // ラジアン単位のスリップアングル
+            // GLの座標系では左右および上下の向きを反転させる必要がある
+            // 90度ずれを修正するためにsinとcosを入れ替え
+            float slipX = -Mathf.Sin(slipRad) * circleRadius * 0.8f; // X軸方向（前後）（反転）
+            float slipY = Mathf.Cos(slipRad) * circleRadius * 0.8f; // Z軸方向（左右）（反転）
+            
+            // スリップアングルの矢印を描画（線を細くする）
+            DrawLine(circleCenter, circleCenter + new Vector2(slipX, slipY), new Color(0.2f, 0.2f, 1.0f, 0.8f), 1.5f);
+        }
+    }
+    
     private void Update()
     {
         // キャッシュしたRigidbodyから速度を計算
@@ -160,142 +336,30 @@ public class TyreDebug : MonoBehaviour
     // 摩擦円を描画する関数
     private void DrawFrictionCircle(Vector3 screenPos)
     {
-        if (mFrictionCirclePow <= 0) return;
+        // この関数は一時的なGUI表示のために使用される
+        // 実際の描画はDrawFrictionCircleGLで行われる
         
-        // 摩擦円の半径を計算（画面サイズに合わせて調整）
-        // 半径を3倍に拡大して視認性を向上
-        float circleRadius = Mathf.Sqrt(mFrictionCirclePow) * 6.0f;
-        
-        // 摩擦円の中心位置（スクリーン座標を使用）
-        Vector2 circleCenter = new Vector2(screenPos.x + 150, screenPos.y + 200);
-        
-#if UNITY_EDITOR
-        // 摩擦力の大きさを摩擦円の半径に対する比率で計算
-        float forceRatio = 0f;
-        if (mFrictionCirclePow > 0.01f && FrictionForce.magnitude > 0.01f)
-        {
-            forceRatio = FrictionForce.magnitude / mFrictionCirclePow;
-        }
-        
-        // 摩擦限界を超えたかどうかに基づいて色を変更
-        Color circleColor;
-        if (forceRatio >= 1.0f)
-        {
-            // 摩擦限界を超えた場合は赤よりのオレンジ
-            circleColor = new Color(1.0f, 0.5f, 0.0f, 0.5f); // オレンジ
-        }
-        else
-        {
-            // 通常は緑
-            circleColor = new Color(0.2f, 0.8f, 0.2f, 0.5f); // 緑
-        }
-        
-        // 摩擦円の描画
-        Handles.color = circleColor;
-        
-        // 太いラインで円を描画するために複数の円を描画
-        for (int i = 0; i < 3; i++)
-        {
-            Handles.DrawWireDisc(circleCenter, Vector3.forward, circleRadius - i * 0.5f);
-        }
-        
-        // 現在の摩擦力を円内に描画
-        if (FrictionForce.magnitude > 0.01f)
-        {
-            // 摩擦力をバイクのローカル座標系に変換
-            Vector3 localForce = transform.InverseTransformDirection(FrictionForce);
-            
-            // 摩擦力の大きさを摩擦円の半径に対する比率で計算
-            //float forceRatio = localForce.magnitude / mFrictionCirclePow;
-            Vector2 forceVector = new Vector2(
-                localForce.x / mFrictionCirclePow * circleRadius, // X軸が前後方向
-                localForce.z / mFrictionCirclePow * circleRadius  // Z軸が左右方向
-            );
-            
-            // 力のベクトルを描画（太い線で視認性向上）
-            Handles.color = new Color(1.0f, 0.2f, 0.2f, 0.8f);
-            
-            // 太いラインで描画するために複数の線を描画
-            for (int i = 0; i < 3; i++)
-            {
-                Vector2 offset = new Vector2(i * 0.5f - 1.0f, i * 0.5f - 1.0f);
-                Handles.DrawLine(circleCenter + offset, circleCenter + forceVector + offset);
-            }
-            
-            // 力の終点に大きめの円を描画
-            Handles.DrawSolidDisc(circleCenter + forceVector, Vector3.forward, 3);
-        }
-        
-        // スリップアングルの表示
+        // スリップアングルの値を表示
         if (Mathf.Abs(SlipAngle) > 0.001f)
         {
-            // スリップアングルの方向を計算（バイクのローカル座標系で）
+            // 摩擦円の半径を計算
+            float circleRadius = Mathf.Sqrt(mFrictionCirclePow) * 6.0f;
+            
+            // 摩擦円の中心位置
+            Vector2 circleCenter = new Vector2(screenPos.x + 150, screenPos.y + 200);
+            
+            // スリップアングルの方向を計算
             float slipAngleDeg = mSlipAngle; // 度数法でのスリップアングル
-            
-            // バイクのローカル座標系でのスリップアングルの方向を計算
             float slipRad = SlipAngle; // ラジアン単位のスリップアングル
-            float slipX = Mathf.Cos(slipRad) * circleRadius * 0.8f; // X軸方向（前後）
-            float slipY = Mathf.Sin(slipRad) * circleRadius * 0.8f; // Z軸方向（左右）
+            float slipX = Mathf.Cos(slipRad) * circleRadius * 0.8f;
+            float slipY = Mathf.Sin(slipRad) * circleRadius * 0.8f;
             
-            // スリップアングルの矢印を描画（太い線で視認性向上）
-            Handles.color = new Color(0.2f, 0.2f, 1.0f, 0.8f);
-            
-            // 太いラインで描画するために複数の線を描画
-            for (int i = 0; i < 3; i++)
-            {
-                Vector2 offset = new Vector2(i * 0.5f - 1.0f, i * 0.5f - 1.0f);
-                Handles.DrawLine(circleCenter + offset, circleCenter + new Vector2(slipX, slipY) + offset);
-            }
-            
-            // スリップアングルの終点に大きめの円を描画
-            // Handles.DrawSolidDisc(circleCenter + new Vector2(slipX, slipY), Vector3.forward, 6);
-            
-            // スリップアングルの値を表示（フォントサイズを大きく）
+            // スリップアングルの値をテキストで表示
             GUIStyle slipStyle = new GUIStyle();
             slipStyle.normal.textColor = new Color(0.2f, 0.2f, 1.0f);
             slipStyle.fontSize = 24; // フォントサイズを大きく
             GUI.Label(new Rect(circleCenter.x + slipX - 20, circleCenter.y + slipY - 10, 80, 40), 
                      $"{slipAngleDeg:F1}°", slipStyle);
         }
-#else
-        // ビルド版ではよりシンプルな表示
-        // 摩擦力の大きさを摩擦円の半径に対する比率で計算
-        float forceRatio = 0f;
-        if (mFrictionCirclePow > 0.01f && FrictionForce.magnitude > 0.01f)
-        {
-            forceRatio = FrictionForce.magnitude / mFrictionCirclePow;
-        }
-        
-        // 摩擦限界を超えたかどうかに基づいて色を変更
-        if (forceRatio >= 1.0f)
-        {
-            // 摩擦限界を超えた場合は赤よりのオレンジ
-            GUI.color = new Color(1.0f, 0.5f, 0.0f, 0.5f); // オレンジ
-        }
-        else
-        {
-            // 通常は緑
-            GUI.color = new Color(0.2f, 0.8f, 0.2f, 0.5f); // 緑
-        }
-        
-        // 摩擦円を表す円
-        GUI.DrawTexture(new Rect(circleCenter.x - circleRadius, circleCenter.y - circleRadius, 
-                               circleRadius * 2, circleRadius * 2), Texture2D.whiteTexture);
-        
-        // 摩擦力を表示
-        if (FrictionForce.magnitude > 0.01f)
-        {
-            GUI.color = new Color(1.0f, 0.2f, 0.2f, 0.8f);
-            float forceRatio = FrictionForce.magnitude / mFrictionCirclePow;
-            Vector2 forceVector = new Vector2(
-                FrictionForce.x / mFrictionCirclePow * circleRadius, // X軸が前後方向
-                FrictionForce.z / mFrictionCirclePow * circleRadius  // Z軸が左右方向
-            );
-            
-            // 力の終点に小さな円を描画
-            GUI.DrawTexture(new Rect(circleCenter.x + forceVector.x - 3, circleCenter.y + forceVector.y - 3, 6, 6), 
-                           Texture2D.whiteTexture);
-        }
-#endif
     }
 }
