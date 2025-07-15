@@ -36,6 +36,13 @@ public class BikeCamera : MonoBehaviour
     [Tooltip("カメラの視野角")]
     public float fieldOfView = 60.0f;
     
+    [Header("距離設定")]
+    [Tooltip("バイクとカメラの最低距離")]
+    public float minDistance = 3.0f;
+    
+    [Tooltip("バイクとカメラの最大距離")]
+    public float maxDistance = 10.0f;
+    
     // プライベート変数
     private Vector3 currentVelocity;
     private Rigidbody targetRigidbody;
@@ -86,7 +93,12 @@ public class BikeCamera : MonoBehaviour
                 
                 // 速度ベクトルの方向に基づいてカメラの位置を計算
                 // 速度の逆方向にオフセットを適用
-                desiredPosition = targetPosition - velocityDirection * Mathf.Abs(offset.z);
+                float distance = Mathf.Abs(offset.z);
+                
+                // 距離を最低距離と最大距離の間に制限
+                distance = Mathf.Clamp(distance, minDistance, maxDistance);
+                
+                desiredPosition = targetPosition - velocityDirection * distance;
                 
                 // 高さは固定
                 desiredPosition.y = targetPosition.y + offset.y;
@@ -97,14 +109,26 @@ public class BikeCamera : MonoBehaviour
             else
             {
                 // 速度が遅い場合はバイクの向きに基づいて位置を計算
-                desiredPosition = targetPosition + targetBike.TransformDirection(offset);
+                // オフセットの距離を制限する
+                Vector3 clampedOffset = offset;
+                float distance = Mathf.Abs(clampedOffset.z);
+                distance = Mathf.Clamp(distance, minDistance, maxDistance);
+                clampedOffset.z = -distance; // zは負の値なのでマイナスを付ける
+                
+                desiredPosition = targetPosition + targetBike.TransformDirection(clampedOffset);
                 targetRotation = Quaternion.LookRotation(targetBike.forward, Vector3.up);
             }
         }
         else
         {
             // 速度ベクトルを使用しない場合はバイクのローカル座標系でのオフセットを適用
-            desiredPosition = targetPosition + targetBike.TransformDirection(offset);
+            // オフセットの距離を制限する
+            Vector3 clampedOffset = offset;
+            float distance = Mathf.Abs(clampedOffset.z);
+            distance = Mathf.Clamp(distance, minDistance, maxDistance);
+            clampedOffset.z = -distance; // zは負の値なのでマイナスを付ける
+            
+            desiredPosition = targetPosition + targetBike.TransformDirection(clampedOffset);
             targetRotation = Quaternion.LookRotation(targetBike.forward, Vector3.up);
         }
         
@@ -112,7 +136,27 @@ public class BikeCamera : MonoBehaviour
         desiredPosition.y += heightOffset;
         
         // 位置の滑らかな移動
-        transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref smoothDampVelocity, 1.0f / positionSmoothSpeed);
+        Vector3 newPosition = Vector3.SmoothDamp(transform.position, desiredPosition, ref smoothDampVelocity, 1.0f / positionSmoothSpeed);
+        
+        // 移動後のバイクからの距離を計算
+        Vector3 directionToCamera = newPosition - targetPosition;
+        float currentDistance = directionToCamera.magnitude;
+        
+        // 距離が最小距離より小さい場合は調整
+        if (currentDistance < minDistance)
+        {
+            directionToCamera = directionToCamera.normalized * minDistance;
+            newPosition = targetPosition + directionToCamera;
+        }
+        // 距離が最大距離より大きい場合は調整
+        else if (currentDistance > maxDistance)
+        {
+            directionToCamera = directionToCamera.normalized * maxDistance;
+            newPosition = targetPosition + directionToCamera;
+        }
+        
+        // 新しい位置を設定
+        transform.position = newPosition;
         
         // 回転の滑らかな変更
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSmoothSpeed);

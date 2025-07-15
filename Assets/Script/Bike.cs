@@ -183,12 +183,13 @@ public class Bike : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        // キーボード入力の処理
-        ProcessInput();
     }
     
     void FixedUpdate()
     {
+        // キーボード入力の処理
+        ProcessInput();
+
         // 駆動力の適用
         ApplyDriveForce();
         
@@ -245,7 +246,7 @@ public class Bike : MonoBehaviour
             // 両方のタイヤが地面についている場合はトルクを増大
             if (FrontWheel.IsGrounded && RearWheel.IsGrounded)
             {
-                torqueMultiplier = 3.0f;
+                torqueMultiplier = 1.0f;
             }
             
             Vector3 pitchTorque = rightAxis * -verticalInput * PitchTorqueStrength * torqueMultiplier;
@@ -354,10 +355,22 @@ public class Bike : MonoBehaviour
             }
         }
         
-        // 後輪に駆動力を設定
+        // 前輪と後輪に駆動力を設定
         if (RearWheel != null)
         {
             RearWheel.DriveInput = CurrentDriveInput;
+        }
+        
+        // ブレーキの場合は前輪にも適用
+        if (FrontWheel != null && CurrentDriveInput < 0)
+        {
+            // 前輪にもブレーキ力を適用
+            FrontWheel.DriveInput = CurrentDriveInput;
+        }
+        else if (FrontWheel != null)
+        {
+            // ブレーキ以外の場合は前輪には駆動力を適用しない
+            FrontWheel.DriveInput = 0;
         }
     }
     
