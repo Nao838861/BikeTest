@@ -67,7 +67,8 @@ public class TyreSpring : MonoBehaviour
     private Vector3 SpringForce;
     private Vector3 DamperForce;
     private Vector3 TotalForce;
-    private bool IsGrounded;
+    // タイヤが地面に接地しているかどうかを示すプロパティ（publicに変更）
+    public bool IsGrounded { get; private set; }
     private float IsGroundedTime; // 着地してからの経過時間
     private Vector3 InitialLocalPosition; // 初期ローカル位置
     

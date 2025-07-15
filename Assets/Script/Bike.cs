@@ -185,7 +185,8 @@ public class Bike : MonoBehaviour
         ApplyDriveForce();
         
         // 安定化力の適用
-        if (EnableStabilization && EnablePIDControl)
+        // 両方のタイヤが空中に浮いているときは安定化力を適用しない
+        if (EnableStabilization && EnablePIDControl && (FrontWheel.IsGrounded || RearWheel.IsGrounded))
         {
             ApplyStabilizationForce();
         }
@@ -203,8 +204,9 @@ public class Bike : MonoBehaviour
     // キーボード入力の処理
     void ProcessInput()
     {
-        // 上下キーの入力を取得（前後移動用）
-        float verticalInput = Input.GetAxis("Vertical");
+        // Fire2とFire3の入力を取得（前後移動用）
+        bool accelerateInput = Input.GetButton("Fire2"); // 前進
+        bool brakeInput = Input.GetButton("Fire3");     // 後退
         
         // 左右キーの入力を取得（傾き制御用）
         float horizontalInput = Input.GetAxis("Horizontal");
@@ -213,15 +215,15 @@ public class Bike : MonoBehaviour
         isSteeringInput = Mathf.Abs(horizontalInput) > 0.01f;
         
         // 入力に基づいて目標駆動力を設定
-        if (verticalInput > 0)
+        if (accelerateInput)
         {
             // 前進（アクセル）
-            targetDriveInput = verticalInput * AccelerationSensitivity;
+            targetDriveInput = AccelerationSensitivity;
         }
-        else if (verticalInput < 0)
+        else if (brakeInput)
         {
             // 後退（バック）
-            targetDriveInput = verticalInput * BrakeSensitivity;
+            targetDriveInput = -BrakeSensitivity;
         }
         else
         {
@@ -445,102 +447,101 @@ public class Bike : MonoBehaviour
         HandleTransform.localRotation = Quaternion.Euler(CurrentHandleAngle, 0, 0);
     }
         
-        /// <summary>
-        /// デバッグ情報を更新する
-        /// </summary>
-        void UpdateDebugInfo()
-        {
-            if (rb == null) return;
-            
-            // 現在のバイクの向きを取得
-            Vector3 currentUp = transform.up;
-            Vector3 currentForward = transform.forward;
-            
-            // バイクの前後方向を地面に投影
-            Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, Vector3.up).normalized;
-            
-            // バイクの横方向を計算
-            Vector3 bikeRight = Vector3.Cross(forwardOnGround, Vector3.up).normalized;
-            
-            // 全体の傾き角度を計算
-            CurrentTiltAngle = Vector3.Angle(currentUp, Vector3.up);
-            
-            // 左右方向の傾き角度（ロール）を計算
-            Vector3 idealUp = Vector3.up;
-            Vector3 debugSideProjection = Vector3.ProjectOnPlane(currentUp, forwardOnGround);
-            CurrentRollAngle = Vector3.SignedAngle(idealUp, debugSideProjection, forwardOnGround);
-            
-            // 前後方向の傾き角度（ピッチ）を計算
-            Vector3 frontBackDirection = Vector3.Cross(bikeRight, Vector3.up).normalized;
-            Vector3 frontProjection = Vector3.ProjectOnPlane(currentUp, bikeRight);
-            CurrentPitchAngle = Vector3.SignedAngle(idealUp, frontProjection, bikeRight);
-            
-            // トルクベクトルを表示
-            DrawForceVectors();
-        }
+
+    
+    /// <summary>
+    /// デバッグ情報を更新する
+    /// </summary>
+    void UpdateDebugInfo()
+    {
+        if (rb == null) return;
         
-        /// <summary>
-        /// デバッグ情報を画面に表示する
-        /// </summary>
-        void OnGUI()
-        {
-            if (!ShowDebugInfo) return;
-            
-            // デバッグ情報の表示位置とサイズを設定
-            int width = 300;
-            int height = 300;
-            int padding = 10;
-            int lineHeight = 20;
-            
-            // 画面右上に表示
-            GUIStyle style = new GUIStyle();
-            style.normal.textColor = Color.white;
-            style.fontSize = 16;
-            
-            // 背景を半透明にする
-            Texture2D texture = new Texture2D(1, 1);
-            texture.SetPixel(0, 0, new Color(0, 0, 0, 0.5f));
-            texture.Apply();
-            style.normal.background = texture;
-            
-            // デバッグ情報を表示
-            GUI.Box(new Rect(Screen.width - width - padding, padding, width, height), "", style);
-            
-            // デバッグテキストのスタイル
-            GUIStyle textStyle = new GUIStyle();
-            textStyle.normal.textColor = Color.white;
-            textStyle.fontSize = 14;
-            textStyle.alignment = TextAnchor.MiddleLeft;
-            
-            // 各種情報を表示
-            int y = padding + 5;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"左右の傾き（Roll）: {CurrentRollAngle:F1}度", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"前後の傾き（Pitch）: {CurrentPitchAngle:F1}度", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"全体の傾き: {CurrentTiltAngle:F1}度", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル角度: {CurrentHandleAngle:F1}度", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"アクセル入力: {CurrentDriveInput:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"プレイヤー目標傾き: {targetLeanAngle:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステアトルク: {selfSteerTorqueValue:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"キャスター効果: {casterEffectValue:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"現在角度: {currentRollAngleValue:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"目標角度: {targetRollAngleValue:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID出力: {pidOutputValue:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"P 角度差分: {rollErrorValue:F2} {rollErrorPrev:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"I 積分項: {rollErrorIntegralValue:F2}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"D 微分項: {rollErrorDerivativeValue:F2}", textStyle);
+        // 現在の入力値を更新
+        CurrentDriveInput = RearWheel.DriveInput;
+        
+        // 現在の傾き角度を計算
+        Vector3 currentUp = transform.up;
+        Vector3 worldUp = Vector3.up;
+        
+        // 全体の傾き角度を計算
+        CurrentTiltAngle = Vector3.Angle(currentUp, worldUp);
+        
+        // 左右方向の傾き角度（ロール）を計算
+        Vector3 rightVector = transform.right;
+        Vector3 projectedRight = Vector3.ProjectOnPlane(rightVector, Vector3.up).normalized;
+        float rollSign = Vector3.Dot(transform.up, Vector3.Cross(projectedRight, rightVector)) < 0 ? -1 : 1;
+        CurrentRollAngle = Vector3.Angle(rightVector, projectedRight) * rollSign;
+        
+        // 前後方向の傾き角度（ピッチ）を計算
+        Vector3 forwardVector = transform.forward;
+        Vector3 projectedForward = Vector3.ProjectOnPlane(forwardVector, Vector3.up).normalized;
+        float pitchSign = Vector3.Dot(transform.up, Vector3.Cross(forwardVector, projectedForward)) < 0 ? -1 : 1;
+        CurrentPitchAngle = Vector3.Angle(forwardVector, projectedForward) * pitchSign;
+        
+    }
+
+    /// <summary>
+    /// デバッグ情報を画面に表示する
+    /// </summary>
+    void OnGUI()
+    {
+        if (!ShowDebugInfo) return;
+        
+        // デバッグ情報の表示位置とサイズを設定
+        int width = 300;
+        int height = 300;
+        int padding = 10;
+        int lineHeight = 20;
+        
+        // 画面右上に表示
+        GUIStyle style = new GUIStyle();
+        style.normal.textColor = Color.white;
+        style.fontSize = 16;
+        
+        // 背景を半透明にする
+        Texture2D texture = new Texture2D(1, 1);
+        texture.SetPixel(0, 0, new Color(0, 0, 0, 0.5f));
+        texture.Apply();
+        style.normal.background = texture;
+        
+        // デバッグ情報を表示
+        GUI.Box(new Rect(Screen.width - width - padding, padding, width, height), "", style);
+        
+        // デバッグテキストのスタイル
+        GUIStyle textStyle = new GUIStyle();
+        textStyle.normal.textColor = Color.white;
+        textStyle.fontSize = 14;
+        textStyle.alignment = TextAnchor.MiddleLeft;
+        
+        // 各種情報を表示
+        int y = padding + 5;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"左右の傾き（Roll）: {CurrentRollAngle:F1}度", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"前後の傾き（Pitch）: {CurrentPitchAngle:F1}度", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"全体の傾き: {CurrentTiltAngle:F1}度", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル角度: {CurrentHandleAngle:F1}度", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"アクセル入力: {CurrentDriveInput:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"プレイヤー目標傾き: {targetLeanAngle:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステアトルク: {selfSteerTorqueValue:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"キャスター効果: {casterEffectValue:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"現在角度: {currentRollAngleValue:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"目標角度: {targetRollAngleValue:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID出力: {pidOutputValue:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"P 角度差分: {rollErrorValue:F2} {rollErrorPrev:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"I 積分項: {rollErrorIntegralValue:F2}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"D 微分項: {rollErrorDerivativeValue:F2}", textStyle);
             y += lineHeight;
 /*            
             GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステア: {(EnableSelfSteer ? "ON" : "OFF")}", textStyle);

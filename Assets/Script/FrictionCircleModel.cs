@@ -51,7 +51,7 @@ public class FrictionCircleModel : MonoBehaviour, ITyreFrictionModel
         // 摩擦円の半径を計算（Car.csの実装を参考）
         // 地面にかかる力に比例した摩擦円の半径
         // Car.csと完全に同じ摩擦円の計算
-        frictionCircleRadius = normalForce * 0.6f;
+        frictionCircleRadius = normalForce * 0.9f;
         
         // タイヤ速度から接触面の法線成分を除去
         Vector3 velocityOnPlane = contactVelocity - contactNormal * Vector3.Dot(contactNormal, contactVelocity);
