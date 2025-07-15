@@ -20,57 +20,65 @@ public class Bike : MonoBehaviour
     [Tooltip("ハンドルの最大回転角度")]
     public float MaxHandleAngle = 30.0f;
     [Tooltip("低速時のハンドルトルク倍率（速度に応じてトルクが変化）")]
-    public float LowSpeedHandleTorqueMultiplier = 1.5f;
+    public float LowSpeedHandleTorqueMultiplier = 30.0f;
     [Tooltip("低速域の上限速度（m/s）、これ以上で通常のトルクになる")]
     public float LowSpeedThreshold = 5.5f;  // 約時速20km
     [Tooltip("ハンドルの慣性モーメント（値が大きいほど動きに抜かりがある）")]
     public float HandleInertiaMoment = 0.5f;
     [Tooltip("ハンドルの減衰係数（値が大きいほど速く止まる）")]
-    public float HandleDamping = 5.0f;
+    public float HandleDamping = 20.0f;
     [Tooltip("ハンドルの自動中心化トルク")]
-    public float HandleCenteringTorque = 2.0f;
+    public float HandleCenteringTorque = 200.0f;
     [Tooltip("ハンドル入力中の中心化トルクの倍率（0で完全に無効、1で通常通り）")]
     public float SteeringCenteringMultiplier = 0.5f;
     [Tooltip("セルフステアの強さ（傾きによるハンドル回転の強さ）")]
     public float SelfSteerStrength = 5.0f;
     [Tooltip("セルフステアが有効になる最低速度（m/s）")]
-    public float SelfSteerMinSpeed = 2.0f;
+    public float SelfSteerMinSpeed = 0.0f;
     [Tooltip("キャスター角（度）")]
     public float CasterAngle = 25.0f;
     [Tooltip("キャスター効果の強さ")]
-    public float CasterEffectStrength = 2.0f;
+    public float CasterEffectStrength = 20.0f;
     [Tooltip("キャスター効果が最大になる速度（m/s）")]
     public float CasterMaxEffectSpeed = 10.0f;
     
     [Header("入力設定")]
     [Tooltip("加速の感度")]
-    public float AccelerationSensitivity = 1.0f;
+    public float AccelerationSensitivity = 0.2f;
+    [Tooltip("ターボ加速の感度")]
+    public float TurboAccelerationSensitivity = 0.5f;
     [Tooltip("ブレーキの感度")]
     public float BrakeSensitivity = 1.0f;
     [Tooltip("入力の滑らかさ（値が大きいほど滑らか）")]
     public float InputSmoothness = 5.0f;
+    [Tooltip("前後傾きトルクの強さ")]
+    public float PitchTorqueStrength = 10.0f;
+    [Tooltip("空中での左右回転トルクの強さ")]
+    public float AirRollTorqueStrength = 5.0f;
+    [Tooltip("空中での回転減衰係数（値が大きいほど速く減衰）")]
+    public float AirRotationDamping = 0.5f;
     [Tooltip("最大速度制限（m/s）、これ以上でアクセルの効果が順次減少")]
-    public float MaxSpeedThreshold = 16.7f;  // 約60km/h
+    public float MaxSpeedThreshold = 30.0f;  // 約60km/h
     
     [Header("安定化設定")]
     [Tooltip("安定化機能を有効にするかどうか")]
     public bool EnableStabilization = true;
     [Tooltip("安定化の比例項ゲイン")]
-    public float StabilizationP = 0.5f;
+    public float StabilizationP = 20.0f;
     [Tooltip("安定化の積分項ゲイン")]
-    public float StabilizationI = 0.05f;
+    public float StabilizationI = 20.0f;
     [Tooltip("安定化の微分項ゲイン")]
-    public float StabilizationD = 0.2f;
+    public float StabilizationD = 3.0f;
     [Tooltip("積分項の最大値（ワインドアップ防止用）")]
-    public float IntegralMax = 5.0f;
+    public float IntegralMax = 10.0f;
     [Tooltip("目標の上向きベクトル（通常はVector3.up）")]
     public Vector3 TargetUpDirection = Vector3.up;
     
     [Header("傾き設定")]
     [Tooltip("ハンドル操作による傾きの強さ（値が大きいほど強く傾く）")]
-    public float LeanStrength = 0.5f;
+    public float LeanStrength = 160.0f;
     [Tooltip("最大傾き角度（度）")]
-    public float MaxLeanAngle = 30.0f;
+    public float MaxLeanAngle = 40.0f;
     [Tooltip("傾きの滑らかさ（値が大きいほど滑らか）")]
     public float LeanSmoothness = 2.0f;
     
@@ -184,11 +192,20 @@ public class Bike : MonoBehaviour
         // 駆動力の適用
         ApplyDriveForce();
         
+        // 両方のタイヤが浮いているか確認
+        bool isAirborne = !FrontWheel.IsGrounded && !RearWheel.IsGrounded;
+        
         // 安定化力の適用
         // 両方のタイヤが空中に浮いているときは安定化力を適用しない
         if (EnableStabilization && EnablePIDControl && (FrontWheel.IsGrounded || RearWheel.IsGrounded))
         {
             ApplyStabilizationForce();
+        }
+        
+        // 空中での回転減衰を適用
+        if (isAirborne)
+        {
+            ApplyAirRotationDamping();
         }
         
         // ハンドルの回転を適用
@@ -204,26 +221,64 @@ public class Bike : MonoBehaviour
     // キーボード入力の処理
     void ProcessInput()
     {
-        // Fire2とFire3の入力を取得（前後移動用）
-        bool accelerateInput = Input.GetButton("Fire2"); // 前進
+        // Fire1、Fire2、Fire3の入力を取得
+        bool turboInput = Input.GetButton("Fire1");    // ターボ加速
+        bool accelerateInput = Input.GetButton("Fire2"); // 通常加速
         bool brakeInput = Input.GetButton("Fire3");     // 後退
         
         // 左右キーの入力を取得（傾き制御用）
         float horizontalInput = Input.GetAxis("Horizontal");
         
+        // 上下キーの入力を取得（前後傾き用）
+        float verticalInput = Input.GetAxis("Vertical");
+        
+        // 両方のタイヤが浮いているか確認
+        bool isAirborne = !FrontWheel.IsGrounded && !RearWheel.IsGrounded;
+        
+        // 前後傾きのトルクを適用
+        if (Mathf.Abs(verticalInput) > 0.01f)
+        {
+            // 上キーで前に倒れる、下キーでウイリー方向に回転
+            Vector3 rightAxis = transform.right;
+            float torqueMultiplier = 1.0f;
+            
+            // 両方のタイヤが地面についている場合はトルクを増大
+            if (FrontWheel.IsGrounded && RearWheel.IsGrounded)
+            {
+                torqueMultiplier = 3.0f;
+            }
+            
+            Vector3 pitchTorque = rightAxis * -verticalInput * PitchTorqueStrength * torqueMultiplier;
+            rb.AddTorque(pitchTorque);
+        }
+        
+        // 空中での左右回転トルクを適用
+        if (isAirborne && Mathf.Abs(horizontalInput) > 0.01f)
+        {
+            // バイクのup方向ベクトルを中心に回転させる
+            Vector3 upAxis = transform.up;
+            Vector3 rollTorque = upAxis * horizontalInput * AirRollTorqueStrength;
+            rb.AddTorque(rollTorque);
+        }
+        
         // ハンドル入力中かどうかを更新
         isSteeringInput = Mathf.Abs(horizontalInput) > 0.01f;
-        
+
         // 入力に基づいて目標駆動力を設定
-        if (accelerateInput)
-        {
-            // 前進（アクセル）
-            targetDriveInput = AccelerationSensitivity;
-        }
-        else if (brakeInput)
+        if (brakeInput)
         {
             // 後退（バック）
             targetDriveInput = -BrakeSensitivity;
+        }
+        else if (turboInput)
+        {
+            // ターボ加速（Fire1）
+            targetDriveInput = TurboAccelerationSensitivity;
+        }
+        else if (accelerateInput)
+        {
+            // 通常加速（Fire2）
+            targetDriveInput = AccelerationSensitivity;
         }
         else
         {
@@ -418,12 +473,13 @@ public class Bike : MonoBehaviour
                 // 低速域ではトルクを大きくする
                 // 速度が遅いほど大きくなるように計算
                 float speedFactor = 1.0f - (speed / LowSpeedThreshold);
-                float torqueMultiplier = 1.0f + (LowSpeedHandleTorqueMultiplier - 1.0f) * speedFactor;
+                float torqueMultiplier =    (LowSpeedHandleTorqueMultiplier) * speedFactor;
                 
                 // 現在のハンドル角度に基づいてトルクを追加
-                float lowSpeedExtraTorque = -CurrentHandleAngle * 0.2f * torqueMultiplier;
+                float factor = -Input.GetAxis("Horizontal");
+                float lowSpeedExtraTorque = factor * torqueMultiplier;
                 totalTorque += lowSpeedExtraTorque;
-                
+                Debug.Log("lowSpeedExtraTorque: " + lowSpeedExtraTorque);
                 // 角速度を更新（トルク調整後）
                 float extraAcceleration = lowSpeedExtraTorque / HandleInertiaMoment;
                 HandleAngularVelocity += extraAcceleration * Time.fixedDeltaTime;
@@ -450,9 +506,26 @@ public class Bike : MonoBehaviour
 
     
     /// <summary>
+    /// 空中での回転減衰を適用する
+    /// </summary>
+    private void ApplyAirRotationDamping()
+    {
+        if (rb == null) return;
+        
+        // 現在の角速度を取得
+        Vector3 angularVelocity = rb.angularVelocity;
+        
+        // 角速度に減衰を適用
+        angularVelocity *= (1.0f - AirRotationDamping * Time.fixedDeltaTime);
+        
+        // 新しい角速度を設定
+        rb.angularVelocity = angularVelocity;
+    }
+    
+    /// <summary>
     /// デバッグ情報を更新する
     /// </summary>
-    void UpdateDebugInfo()
+    private void UpdateDebugInfo()
     {
         if (rb == null) return;
         
