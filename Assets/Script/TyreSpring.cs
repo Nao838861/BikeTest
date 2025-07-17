@@ -71,6 +71,7 @@ public class TyreSpring : MonoBehaviour
     public bool IsGrounded { get; private set; }
     private float IsGroundedTime; // 着地してからの経過時間
     private Vector3 InitialLocalPosition; // 初期ローカル位置
+    private Vector3 groundNormal = Vector3.up; // 地面の法線ベクトル
     
     // 摩擦関連の変数
     private float NormalForce;           // 垂直抗力（地面への圧力）
@@ -212,6 +213,9 @@ public class TyreSpring : MonoBehaviour
             // 地面との接触点を計算
             HitPoint = HitInfo.point;
             
+            // 地面の法線を保存
+            groundNormal = HitInfo.normal;
+            
             // ばねの現在の長さを計算（タイヤの半径を考慮）
             CurrentLength = Vector3.Distance(basePosition, HitPoint) - TyreRadius;
             CurrentLength = Mathf.Clamp(CurrentLength, 0, MaxLength);
@@ -323,6 +327,15 @@ public class TyreSpring : MonoBehaviour
         {
             currentDriveForce = Vector3.zero;
         }
+    }
+    
+    /// <summary>
+    /// 地面の法線ベクトルを取得する
+    /// </summary>
+    /// <returns>地面の法線ベクトル（接地していない場合はVector3.up）</returns>
+    public Vector3 GetGroundNormal()
+    {
+        return IsGrounded ? groundNormal : Vector3.up;
     }
     
     // デバッグ描画

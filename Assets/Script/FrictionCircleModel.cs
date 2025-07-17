@@ -72,8 +72,8 @@ public class FrictionCircleModel : MonoBehaviour, ITyreFrictionModel
         
         // スリップアングルの符号を求める（Car.csと完全に同じ方法）
         float sign = 1.0f;
-        // Car.csでは上方向を使用しているが、ここでは法線を使用する
-        Vector3 crs = Vector3.Cross(velocityOnPlane.normalized, Vector3.up);
+        // 実際の地面の法線を使用する
+        Vector3 crs = Vector3.Cross(velocityOnPlane.normalized, contactNormal);
         if (Vector3.Dot(crs, longitudinalDir) < 0.0f) sign = -1.0f;
         
         // 符号を適用

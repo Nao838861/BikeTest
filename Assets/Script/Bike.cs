@@ -108,6 +108,11 @@ public class Bike : MonoBehaviour
     public bool ShowForceVectors = true;
     public float ForceVectorScale = 0.1f;
     
+    [Header("地面情報")]
+    [Tooltip("地面の法線ベクトル（デバッグ表示用）")]
+    [ReadOnly]
+    public Vector3 GroundNormal = Vector3.up;
+    
     [Header("機能のON/OFF切り替え")]
     [Tooltip("セルフステア機能の有効/無効")]
     public bool EnableSelfSteer = true;
@@ -187,6 +192,9 @@ public class Bike : MonoBehaviour
     
     void FixedUpdate()
     {
+        // 地面の法線を更新
+        UpdateGroundNormal();
+        
         // キーボード入力の処理
         ProcessInput();
 
@@ -404,12 +412,12 @@ public class Bike : MonoBehaviour
             Vector3 currentUp = transform.up;
             Vector3 currentForward = transform.forward;
             
-            // バイクの前後方向を地面に投影
-            Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, Vector3.up).normalized;
+            // バイクの前後方向を実際の地面に投影
+            Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, GroundNormal).normalized;
             
             // 現在の左右の傾き角度を計算
             Vector3 sideProjection = Vector3.ProjectOnPlane(currentUp, forwardOnGround).normalized;
-            float currentRollAngle = Vector3.SignedAngle(Vector3.up, sideProjection, forwardOnGround);
+            float currentRollAngle = Vector3.SignedAngle(GroundNormal, sideProjection, forwardOnGround);
             
             float speed = rb.velocity.magnitude;
             float speedFactor = 1.0f;//Mathf.Clamp01((speed - SelfSteerMinSpeed) / 5.0f);
@@ -547,20 +555,20 @@ public class Bike : MonoBehaviour
         
         // 現在の傾き角度を計算
         Vector3 currentUp = transform.up;
-        Vector3 worldUp = Vector3.up;
+        Vector3 worldUp = GroundNormal;
         
         // 全体の傾き角度を計算
         CurrentTiltAngle = Vector3.Angle(currentUp, worldUp);
         
         // 左右方向の傾き角度（ロール）を計算
         Vector3 rightVector = transform.right;
-        Vector3 projectedRight = Vector3.ProjectOnPlane(rightVector, Vector3.up).normalized;
+        Vector3 projectedRight = Vector3.ProjectOnPlane(rightVector, GroundNormal).normalized;
         float rollSign = Vector3.Dot(transform.up, Vector3.Cross(projectedRight, rightVector)) < 0 ? -1 : 1;
         CurrentRollAngle = Vector3.Angle(rightVector, projectedRight) * rollSign;
         
         // 前後方向の傾き角度（ピッチ）を計算
         Vector3 forwardVector = transform.forward;
-        Vector3 projectedForward = Vector3.ProjectOnPlane(forwardVector, Vector3.up).normalized;
+        Vector3 projectedForward = Vector3.ProjectOnPlane(forwardVector, GroundNormal).normalized;
         float pitchSign = Vector3.Dot(transform.up, Vector3.Cross(forwardVector, projectedForward)) < 0 ? -1 : 1;
         CurrentPitchAngle = Vector3.Angle(forwardVector, projectedForward) * pitchSign;
         
@@ -673,6 +681,40 @@ public class Bike : MonoBehaviour
     
     
     /// <summary>
+    /// 地面の法線ベクトルを更新する
+    /// タイヤが地面に接触している場合は、その法線を使用する
+    /// 両方のタイヤが浮いている場合は、Vector3.upを使用する
+    /// </summary>
+    void UpdateGroundNormal()
+    {
+        // デフォルトは上向き（水平面）
+        Vector3 normal = Vector3.up;
+        
+        // 前輪と後輪の接地状態を確認
+        bool frontGrounded = FrontWheel != null && FrontWheel.IsGrounded;
+        bool rearGrounded = RearWheel != null && RearWheel.IsGrounded;
+        
+        if (frontGrounded && rearGrounded)
+        {
+            // 両方のタイヤが接地している場合は、両方の法線の平均を使用
+            normal = (FrontWheel.GetGroundNormal() + RearWheel.GetGroundNormal()).normalized;
+        }
+        else if (frontGrounded)
+        {
+            // 前輪のみ接地している場合
+            normal = FrontWheel.GetGroundNormal();
+        }
+        else if (rearGrounded)
+        {
+            // 後輪のみ接地している場合
+            normal = RearWheel.GetGroundNormal();
+        }
+        
+        // 法線ベクトルを更新
+        GroundNormal = normal;
+    }
+    
+    /// <summary>
     /// バイクの安定化力をPID制御で適用する
     /// プレイヤーの入力（targetLeanAngle）を目標角度として使用
     /// ロール（左右の傾き）のみを補正し、ピッチ（前後の傾き）は補正しない
@@ -685,13 +727,13 @@ public class Bike : MonoBehaviour
         Vector3 currentUp = transform.up;
         Vector3 currentForward = transform.forward;
         
-        // バイクの前後方向を地面に投影
-        Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, Vector3.up).normalized;
-        Vector3 bikeRight = Vector3.Cross(forwardOnGround, Vector3.up).normalized;
+        // バイクの前後方向を実際の地面に投影
+        Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, GroundNormal).normalized;
+        Vector3 bikeRight = Vector3.Cross(forwardOnGround, GroundNormal).normalized;
         
         // 現在の左右の傾き角度を計算
         Vector3 sideProjection = Vector3.ProjectOnPlane(currentUp, forwardOnGround).normalized;
-        float currentRollAngle = Vector3.SignedAngle(Vector3.up, sideProjection, forwardOnGround);
+        float currentRollAngle = Vector3.SignedAngle(GroundNormal, sideProjection, forwardOnGround);
         
         // プレイヤーの入力を目標角度として使用
         float targetRollAngle = targetLeanAngle;
@@ -700,11 +742,13 @@ public class Bike : MonoBehaviour
         Vector3 velocity = rb.velocity;
         float speed = velocity.magnitude;
         
-        if (speed < 2.0f)
+        // 回転を抑制する最大速度
+        float maxAngleSpeed = 2.0f;
+        if (speed < maxAngleSpeed)
         {
             // 低速時は傾きを抑制
-            float speedFactor = speed / 2.0f;
-            targetRollAngle *= speedFactor;
+            float angleFactor = speed / maxAngleSpeed;
+            targetRollAngle *= angleFactor;
         }
         
         // PID制御の計算
