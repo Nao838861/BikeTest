@@ -256,14 +256,29 @@ public class Bike : MonoBehaviour
     [Tooltip("ドリフト中の傾き速度の倍率")]
     public float DriftLeanSpeedMultiplier = 2.0f;
     
+    [Header("リセット設定")]
+    [Tooltip("リセット時の高さオフセット（メートル）")]
+    public float ResetHeightOffset = 1.5f;
+    [Tooltip("リセット時の速度リセットの強さ")]
+    public float ResetVelocityDamping = 0.9f;
+    
     // キーボード入力の処理
     void ProcessInput()
     {
         // Fire1、Fire2、Fire3、Fire4の入力を取得
         bool turboInput = Input.GetButton("Fire1");    // ターボ加速
-        bool accelerateInput = Input.GetButton("Fire2"); // 通常加速
-        bool brakeInput = Input.GetButton("Fire3");     // 後退
+        bool accelerateInput = Input.GetButton("Fire3"); // 通常加速
+        bool brakeInput = Input.GetButton("Fire2");     // 後退
         bool driftInput = Input.GetButton("Fire4");     // ドリフト
+        
+        // Resetボタンの入力を取得
+        bool resetInput = Input.GetButtonDown("Reset");  // Resetボタン（デフォルトではSpaceキー）
+        
+        // Resetボタンが押されたらバイクをリセット
+        if (resetInput)
+        {
+            ResetBike();
+        }
         
         // ドリフトモードの切り替え
         // Fire4ボタンが押されているとドリフトモードを有効にする
@@ -766,6 +781,46 @@ public class Bike : MonoBehaviour
     }
     
     
+    
+    /// <summary>
+    /// バイクをリセットする
+    /// 現在位置から上に移動し、傾きと速度をリセットする
+    /// </summary>
+    void ResetBike()
+    {
+        if (rb != null)
+        {
+            // 現在の位置を取得
+            Vector3 currentPosition = transform.position;
+            
+            // 地面の法線方向に高さオフセットを加える
+            Vector3 resetPosition = currentPosition + GroundNormal * ResetHeightOffset;
+            
+            // 位置をリセット
+            transform.position = resetPosition;
+            
+            // 回転をリセット（地面の法線に基づいてバイクを立てる）
+            Quaternion targetRotation = Quaternion.FromToRotation(transform.up, GroundNormal) * transform.rotation;
+            transform.rotation = targetRotation;
+            
+            // 速度と角速度をリセット
+            rb.velocity *= (1.0f - ResetVelocityDamping);
+            rb.angularVelocity *= (1.0f - ResetVelocityDamping);
+            
+            // 目標傾き角度をリセット
+            targetLeanAngle = 0.0f;
+            
+            // ドリフトエフェクトをリセット
+            driftEffectStrength = 0.0f;
+            isDriftMode = false;
+            
+            // タイヤの摩擦円倍率をリセット
+            if (RearWheel != null)
+            {
+                RearWheel.FrictionMultiplier = 1.0f;
+            }
+        }
+    }
     
     /// <summary>
     /// 地面の法線ベクトルを更新する
