@@ -11,6 +11,9 @@ public class FrictionCircleModel : MonoBehaviour, ITyreFrictionModel
     public float KineticFrictionCoefficient { get; set; } = 0.8f;  // 動摩擦係数
     public float MinimumFrictionCoefficient { get; set; } = 0.16f;  // 最小摩擦係数
     
+    // 摩擦円の倍率（ドリフトモード用）
+    public float FrictionCircleMultiplier { get; set; } = 1.0f;  // デフォルトは1.0（通常の大きさ）
+    
     // デバッグ表示用のアクセサーメソッド
     public float GetSlipAngle() { return slipAngle; }
     public float GetFrictionCoefficient() { return frictionCoefficient; }
@@ -50,8 +53,8 @@ public class FrictionCircleModel : MonoBehaviour, ITyreFrictionModel
         
         // 摩擦円の半径を計算（Car.csの実装を参考）
         // 地面にかかる力に比例した摩擦円の半径
-        // Car.csと完全に同じ摩擦円の計算
-        frictionCircleRadius = normalForce * 0.9f;
+        // ドリフトモード用に倍率を適用
+        frictionCircleRadius = normalForce * 0.9f * FrictionCircleMultiplier;
         
         // タイヤ速度から接触面の法線成分を除去
         Vector3 velocityOnPlane = contactVelocity - contactNormal * Vector3.Dot(contactNormal, contactVelocity);

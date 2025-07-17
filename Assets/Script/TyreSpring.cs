@@ -12,6 +12,8 @@ public class TyreSpring : MonoBehaviour
     public float DamperConstant = 1.0f;
     [Tooltip("タイヤの静止時の長さ")]
     public float RestLength = 0.5f;
+    [Tooltip("摩擦円の倍率（1.0が通常、小さいほど滑りやすい）")]
+    public float FrictionMultiplier = 1.0f;
     [Tooltip("最大伸縮距離")]
     public float MaxLength = 0.7f;
     
@@ -267,6 +269,8 @@ public class TyreSpring : MonoBehaviour
         if (frictionModel is FrictionCircleModel circleModel)
         {
             circleModel.KineticFrictionCoefficient = KineticFrictionCoefficient;
+            // 摩擦円の倍率を設定（ドリフトモード用）
+            circleModel.FrictionCircleMultiplier = FrictionMultiplier;
         }
         
         // 接触点での車体の速度を計算

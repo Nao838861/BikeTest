@@ -87,14 +87,17 @@ public class Bike : MonoBehaviour
     [ReadOnly]
     public float CurrentDriveInput = 0.0f;
     [Tooltip("現在の傾き角度（全体）")]
-    [ReadOnly]
-    public float CurrentTiltAngle = 0.0f;
-    [Tooltip("現在のハンドル角度")]
-    [ReadOnly]
-    public float CurrentHandleAngle = 0.0f;
-    [Tooltip("左右方向の傾き角度（ロール）")]
-    [ReadOnly]
-    public float CurrentRollAngle = 0.0f;
+    // デバッグ情報表示用の変数
+    private float CurrentRollAngle = 0.0f;
+    private float CurrentHandleAngle = 0.0f;
+    private float CurrentTiltAngle = 0.0f;
+    private float CurrentYawAngle = 0.0f;
+    private float CurrentSpeed = 0.0f;
+    private float CurrentSteerAngle = 0.0f;
+    private float CurrentWheelBase = 0.0f;
+    private float DebugDriftStrength = 0.0f;
+    private float DebugLeanFactor = 0.0f;
+    private float DebugDirectionMultiplier = 1.0f;
     [Tooltip("前後方向の傾き角度（ピッチ）")]
     [ReadOnly]
     public float CurrentPitchAngle = 0.0f;
@@ -227,13 +230,64 @@ public class Bike : MonoBehaviour
     // ハンドル入力中かどうかを追跡する変数
     private bool isSteeringInput = false;
     
+    // ドリフトモードのフラグ
+    private bool isDriftMode = false;
+    
+    // ドリフトエフェクトの強さ（0～1）
+    private float driftEffectStrength = 0f;
+    
+    // ドリフト中の摩擦係数倍率
+    [Header("ドリフト設定")]
+    [Tooltip("ドリフト中の摩擦円倍率")]
+    public float DriftFrictionMultiplier = 0.1f;
+    
+    [Tooltip("ドリフト中のY軸回転力")]
+    public float DriftYawTorqueStrength = 2.0f;
+    
+    [Tooltip("ドリフトエフェクトの強まる速さ（大きいほど速く強まる）")]
+    public float DriftEffectRiseSpeed = 2.0f;
+    
+    [Tooltip("ドリフトエフェクトの弱まる速さ（大きいほど速く弱まる）")]
+    public float DriftEffectFallSpeed = 1.0f;
+    
+    [Tooltip("ドリフト中の傾きによる回転力の倍率")]
+    public float DriftLeanYawMultiplier = 1.5f;
+    
+    [Tooltip("ドリフト中の傾き速度の倍率")]
+    public float DriftLeanSpeedMultiplier = 2.0f;
+    
     // キーボード入力の処理
     void ProcessInput()
     {
-        // Fire1、Fire2、Fire3の入力を取得
+        // Fire1、Fire2、Fire3、Fire4の入力を取得
         bool turboInput = Input.GetButton("Fire1");    // ターボ加速
         bool accelerateInput = Input.GetButton("Fire2"); // 通常加速
         bool brakeInput = Input.GetButton("Fire3");     // 後退
+        bool driftInput = Input.GetButton("Fire4");     // ドリフト
+        
+        // ドリフトモードの切り替え
+        // Fire4ボタンが押されているとドリフトモードを有効にする
+        isDriftMode = driftInput;
+        
+        // ドリフトエフェクトの強さを徐々に変化させる
+        if (isDriftMode)
+        {
+            // ドリフトボタンが押されている場合、徐々に強くする
+            driftEffectStrength = Mathf.Min(1.0f, driftEffectStrength + DriftEffectRiseSpeed * Time.deltaTime);
+        }
+        else
+        {
+            // ドリフトボタンが離された場合、徐々に弱くする
+            driftEffectStrength = Mathf.Max(0.0f, driftEffectStrength - DriftEffectFallSpeed * Time.deltaTime);
+        }
+        
+        // ドリフトエフェクトの強さに基づいて後輪の摩擦円倍率を設定
+        if (RearWheel != null)
+        {
+            // 通常の摩擦円からドリフト摩擦円までの間を補間
+            float frictionMultiplier = Mathf.Lerp(1.0f, DriftFrictionMultiplier, driftEffectStrength);
+            RearWheel.FrictionMultiplier = frictionMultiplier;
+        }
         
         // 左右キーの入力を取得（傾き制御用）
         float horizontalInput = Input.GetAxis("Horizontal");
@@ -243,6 +297,36 @@ public class Bike : MonoBehaviour
         
         // 両方のタイヤが浮いているか確認
         bool isAirborne = !FrontWheel.IsGrounded && !RearWheel.IsGrounded;
+        
+        // ドリフト中のY軸回転制御
+        if (driftEffectStrength > 0.01f && RearWheel.IsGrounded && Mathf.Abs(horizontalInput) > 0.01f)
+        {
+            // バイクの傾き角度を取得
+            float rollAngleDegrees = CurrentRollAngle;
+            
+            // 傾き角度の絶対値を正規化して倍率として使用（0～1の範囲に収める）
+            float leanFactor = Mathf.Clamp01(Mathf.Abs(rollAngleDegrees) / 45.0f);
+            
+            // 傾きの方向と入力の方向が一致している場合に回転力を増大
+            float directionMultiplier = 1.0f;
+            if ((rollAngleDegrees > 0 && horizontalInput > 0) || (rollAngleDegrees < 0 && horizontalInput < 0))
+            {
+                // 傾きと同じ方向に操作すると回転力が増大
+                directionMultiplier = 1.0f + leanFactor * DriftLeanYawMultiplier;
+            }
+            
+            // ドリフトエフェクトの強さ、傾き角度、入力の強さに基づいてY軸回転力を計算
+            Vector3 yawTorque = transform.up * horizontalInput * DriftYawTorqueStrength * driftEffectStrength * directionMultiplier;
+            rb.AddTorque(yawTorque);
+            
+            // デバッグ情報の更新
+            if (ShowDebugInfo)
+            {
+                DebugDriftStrength = driftEffectStrength;
+                DebugLeanFactor = leanFactor;
+                DebugDirectionMultiplier = directionMultiplier;
+            }
+        }
         
         // 前後傾きのトルクを適用
         if (Mathf.Abs(verticalInput) > 0.01f)
@@ -302,7 +386,16 @@ public class Bike : MonoBehaviour
             // プレイヤーの入力に基づいて目標傾き角度を徐々に蓄積
             // 入力方向に応じて蓄積速度を調整
             float targetMaxAngle = horizontalInput * MaxLeanAngle;
-            float accumulationSpeed = LeanAccumulationRate * Time.deltaTime;
+            
+            // ドリフト中は傾きの蓄積速度を増加
+            float leanSpeedMultiplier = 1.0f;
+            if (driftEffectStrength > 0.01f)
+            {
+                // ドリフト強度に応じて傾きの速さを増加
+                leanSpeedMultiplier = 1.0f + driftEffectStrength * DriftLeanSpeedMultiplier;
+            }
+            
+            float accumulationSpeed = LeanAccumulationRate * leanSpeedMultiplier * Time.deltaTime;
             
             // 現在の傾き角度と目標最大角度の符号が同じ場合（同じ方向に傾いている場合）
             if (Mathf.Sign(targetLeanAngle) == Mathf.Sign(targetMaxAngle) || targetLeanAngle == 0)
@@ -583,25 +676,21 @@ public class Bike : MonoBehaviour
         
         // デバッグ情報の表示位置とサイズを設定
         int width = 300;
-        int height = 300;
+        int height = 350; // ドリフト情報用に高さを増やす
         int padding = 10;
         int lineHeight = 20;
         
-        // 画面右上に表示
-        GUIStyle style = new GUIStyle();
-        style.normal.textColor = Color.white;
-        style.fontSize = 16;
+        // 背景を表示
+        Texture2D backgroundTexture = new Texture2D(1, 1);
+        backgroundTexture.SetPixel(0, 0, new Color(0, 0, 0, 0.5f));
+        backgroundTexture.Apply();
         
-        // 背景を半透明にする
-        Texture2D texture = new Texture2D(1, 1);
-        texture.SetPixel(0, 0, new Color(0, 0, 0, 0.5f));
-        texture.Apply();
-        style.normal.background = texture;
+        GUIStyle backgroundStyle = new GUIStyle();
+        backgroundStyle.normal.background = backgroundTexture;
         
-        // デバッグ情報を表示
-        GUI.Box(new Rect(Screen.width - width - padding, padding, width, height), "", style);
+        GUI.Box(new Rect(Screen.width - width - padding, padding, width, height), "", backgroundStyle);
         
-        // デバッグテキストのスタイル
+        // テキストスタイルの設定
         GUIStyle textStyle = new GUIStyle();
         textStyle.normal.textColor = Color.white;
         textStyle.fontSize = 14;
@@ -613,56 +702,54 @@ public class Bike : MonoBehaviour
         y += lineHeight;
         GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"前後の傾き（Pitch）: {CurrentPitchAngle:F1}度", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"全体の傾き: {CurrentTiltAngle:F1}度", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"方向（Yaw）: {CurrentYawAngle:F1}度", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル角度: {CurrentHandleAngle:F1}度", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"速度: {CurrentSpeed:F1} m/s", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"アクセル入力: {CurrentDriveInput:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル角度: {CurrentSteerAngle:F1}度", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"プレイヤー目標傾き: {targetLeanAngle:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID出力: {pidOutputValue:F3}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステアトルク: {selfSteerTorqueValue:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ホイールベース: {CurrentWheelBase:F2} m", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"キャスター効果: {casterEffectValue:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"地面法線: {GroundNormal.ToString("F2")}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"現在角度: {currentRollAngleValue:F2}", textStyle);
+        
+        // ドリフト情報を表示
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ドリフト強度: {DebugDriftStrength:F2}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"目標角度: {targetRollAngleValue:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"傾き係数: {DebugLeanFactor:F2}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID出力: {pidOutputValue:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"方向倍率: {DebugDirectionMultiplier:F2}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"P 角度差分: {rollErrorValue:F2} {rollErrorPrev:F2}", textStyle);
+        
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステア: {(EnableSelfSteer ? "ON" : "OFF")}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"I 積分項: {rollErrorIntegralValue:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"キャスター効果: {(EnableCasterEffect ? "ON" : "OFF")}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"D 微分項: {rollErrorDerivativeValue:F2}", textStyle);
-            y += lineHeight;
-/*            
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステア: {(EnableSelfSteer ? "ON" : "OFF")}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"キャスター効果: {(EnableCasterEffect ? "ON" : "OFF")}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID制御: {(EnablePIDControl ? "ON" : "OFF")}", textStyle);
-            y += lineHeight;
- */           
-            // 速度情報の表示
-            float currentSpeed = 0f;
-            float speedKmh = 0f;
-            if (rb != null)
-            {
-                currentSpeed = rb.velocity.magnitude;
-                speedKmh = currentSpeed * 3.6f; // m/sからkm/hに変換
-            }
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"速度: {speedKmh:F1} km/h", textStyle);
-            y += lineHeight;
-/*            
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"最大速度: {MaxSpeedThreshold * 3.6f:F1} km/h", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力: {(isSteeringInput ? "ON" : "OFF")}", textStyle);
-            y += lineHeight;
-            GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力中の中心化倍率: {SteeringCenteringMultiplier:F2}", textStyle);
-*/            
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID制御: {(EnablePIDControl ? "ON" : "OFF")}", textStyle);
+        y += lineHeight;
+            
+        // 速度情報の表示
+        float currentSpeed = 0f;
+        float speedKmh = 0f;
+        if (rb != null)
+        {
+            currentSpeed = rb.velocity.magnitude;
+            speedKmh = currentSpeed * 3.6f; // m/sからkm/hに変換
         }
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"速度: {speedKmh:F1} km/h", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"最大速度: {MaxSpeedThreshold * 3.6f:F1} km/h", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力: {(isSteeringInput ? "ON" : "OFF")}", textStyle);
+        y += lineHeight;
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力中の中心化倍率: {SteeringCenteringMultiplier:F2}", textStyle);
+        y += lineHeight;
+        
+        // 使用したリソースの解放
+        Object.Destroy(backgroundTexture);
+    }
         
         /// <summary>
         /// トルクベクトルをゲーム画面に表示する
