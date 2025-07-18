@@ -236,6 +236,15 @@ public class Bike : MonoBehaviour
     // ドリフトエフェクトの強さ（0～1）
     private float driftEffectStrength = 0f;
     
+    // 現在のターボゲージ量
+    private float currentTurboGauge = 100f;
+    
+    // オーバーヒート状態かどうか
+    private bool isOverheated = false;
+    
+    // オーバーヒート時の回復速度倍率
+    private float overheatRecoveryMultiplier = 2.0f;
+    
     // ドリフト中の摩擦係数倍率
     [Header("ドリフト設定")]
     [Tooltip("ドリフト中の摩擦円倍率")]
@@ -256,11 +265,24 @@ public class Bike : MonoBehaviour
     [Tooltip("ドリフト中の傾き速度の倍率")]
     public float DriftLeanSpeedMultiplier = 2.0f;
     
+    // ドリフト中のターボ使用時の回転速度倍率
+    public float TurboDriftRotationMultiplier = 1.8f;
+    
     [Header("リセット設定")]
     [Tooltip("リセット時の高さオフセット（メートル）")]
     public float ResetHeightOffset = 1.5f;
     [Tooltip("リセット時の速度リセットの強さ")]
     public float ResetVelocityDamping = 0.9f;
+    
+    [Header("ターボゲージ設定")]
+    [Tooltip("ターボゲージの最大値")]
+    public float MaxTurboGauge = 100f;
+    [Tooltip("ターボ使用時のゲージ消費速度")]
+    public float TurboConsumptionRate = 30f;
+    [Tooltip("ターボゲージの回復速度")]
+    public float TurboRecoveryRate = 10f;
+    [Tooltip("ターボ使用可能な最小ゲージ量")]
+    public float MinTurboThreshold = 10f;
     
     // キーボード入力の処理
     void ProcessInput()
@@ -330,8 +352,15 @@ public class Bike : MonoBehaviour
                 directionMultiplier = 1.0f + leanFactor * DriftLeanYawMultiplier;
             }
             
+            // ターボ使用中かつオーバーヒートしていない場合は回転力を増加
+            float turboRotationMultiplier = 1.0f;
+            if (turboInput && !isOverheated)
+            {
+                turboRotationMultiplier = TurboDriftRotationMultiplier;
+            }
+            
             // ドリフトエフェクトの強さ、傾き角度、入力の強さに基づいてY軸回転力を計算
-            Vector3 yawTorque = transform.up * horizontalInput * DriftYawTorqueStrength * driftEffectStrength * directionMultiplier;
+            Vector3 yawTorque = transform.up * horizontalInput * DriftYawTorqueStrength * driftEffectStrength * directionMultiplier * turboRotationMultiplier;
             rb.AddTorque(yawTorque);
             
             // デバッグ情報の更新
@@ -378,10 +407,25 @@ public class Bike : MonoBehaviour
             // 後退（バック）
             targetDriveInput = -BrakeSensitivity;
         }
-        else if (turboInput)
+        else if (turboInput && !isOverheated)
         {
             // ターボ加速（Fire1）
             targetDriveInput = TurboAccelerationSensitivity;
+            
+            // ターボゲージを消費
+            currentTurboGauge -= TurboConsumptionRate * Time.deltaTime;
+            
+            // ゲージが完全に消費されたらオーバーヒート状態に
+            if (currentTurboGauge <= 0f)
+            {
+                currentTurboGauge = 0f;
+                isOverheated = true;
+            }
+        }
+        else if (turboInput && isOverheated)
+        {
+            // ターボ使用不可またはオーバーヒートの場合は通常加速
+            targetDriveInput = AccelerationSensitivity;
         }
         else if (accelerateInput)
         {
@@ -390,8 +434,31 @@ public class Bike : MonoBehaviour
         }
         else
         {
-            // 入力がない場合は微々に減速
-            targetDriveInput = 0f;
+            // 入力がない場合は減速
+            targetDriveInput = 0.0f;
+        }
+        
+        // ターボ使用していない、またはオーバーヒートの場合はゲージを回復
+        if (!turboInput || isOverheated)
+        {
+            // 回復速度の計算（オーバーヒート時は速度が倍になる）
+            float recoveryRate = TurboRecoveryRate;
+            if (isOverheated)
+            {
+                recoveryRate *= overheatRecoveryMultiplier;
+            }
+            
+            // ターボゲージを回復
+            currentTurboGauge += recoveryRate * Time.deltaTime;
+            
+            // 最大値を超えないように制限
+            if (currentTurboGauge >= MaxTurboGauge)
+            {
+                currentTurboGauge = MaxTurboGauge;
+                
+                // オーバーヒート状態が解除される
+                isOverheated = false;
+            }
         }
         
         // 左右の入力を傾き制御に使用
@@ -691,7 +758,7 @@ public class Bike : MonoBehaviour
         
         // デバッグ情報の表示位置とサイズを設定
         int width = 300;
-        int height = 350; // ドリフト情報用に高さを増やす
+        int height = 380; // ターボゲージ情報用に高さを増やす
         int padding = 10;
         int lineHeight = 20;
         
@@ -744,6 +811,54 @@ public class Bike : MonoBehaviour
         y += lineHeight;
         GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID制御: {(EnablePIDControl ? "ON" : "OFF")}", textStyle);
         y += lineHeight;
+        
+        // ターボゲージ情報を表示
+        string turboStatus = isOverheated ? "オーバーヒート" : "使用可能";
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ターボゲージ: {currentTurboGauge:F1} / {MaxTurboGauge:F0} ({turboStatus})", textStyle);
+        y += lineHeight;
+        
+        // ターボゲージのバーを表示
+        float gaugeWidth = width - 40;
+        float gaugeHeight = 10;
+        float gaugeX = Screen.width - width - padding + 20;
+        float gaugeY = y;
+        
+        // 背景バー
+        GUI.Box(new Rect(gaugeX, gaugeY, gaugeWidth, gaugeHeight), "", new GUIStyle(GUI.skin.box));
+        
+        // ゲージの割合を計算
+        float gaugeFillWidth = (currentTurboGauge / MaxTurboGauge) * gaugeWidth;
+        
+        // ゲージの色を設定
+        Color gaugeColor;
+        if (isOverheated)
+        {
+            // オーバーヒート時は赤
+            gaugeColor = Color.red;
+        }
+        else if (currentTurboGauge < MaxTurboGauge * 0.1f)
+        {
+            // 残量10%以下は黄色
+            gaugeColor = Color.yellow;
+        }
+        else
+        {
+            // 通常時は緑
+            gaugeColor = Color.green;
+        }
+        
+        // ゲージの塗りつぶし
+        Texture2D gaugeTexture = new Texture2D(1, 1);
+        gaugeTexture.SetPixel(0, 0, gaugeColor);
+        gaugeTexture.Apply();
+        
+        // ゲージを描画
+        GUI.DrawTexture(new Rect(gaugeX, gaugeY, gaugeFillWidth, gaugeHeight), gaugeTexture);
+        
+        // テクスチャを破棄
+        Destroy(gaugeTexture);
+        
+        y += lineHeight + 5;
             
         // 速度情報の表示
         float currentSpeed = 0f;
