@@ -42,7 +42,9 @@ public class BikeCamera : MonoBehaviour
     
     [Tooltip("バイクとカメラの最大距離")]
     public float maxDistance = 10.0f;
-    
+
+    public Bike targetBikeObject;
+
     // プライベート変数
     private Vector3 currentVelocity;
     private Rigidbody targetRigidbody;
@@ -83,7 +85,7 @@ public class BikeCamera : MonoBehaviour
         if (rotateWithVelocity && targetRigidbody != null)
         {
             // バイクの速度ベクトルを取得
-            Vector3 velocity = targetRigidbody.velocity;
+            Vector3 velocity = targetRigidbody.velocity + targetBikeObject.getFrontVector();
             
             // 速度が十分にある場合は速度ベクトルの方向を使用
             if (velocity.magnitude > minVelocityForRotation)

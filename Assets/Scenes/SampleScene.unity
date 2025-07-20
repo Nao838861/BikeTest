@@ -1966,7 +1966,7 @@ MonoBehaviour:
   DebugRayColor: {r: 1, g: 0, b: 0, a: 1}
   DriftSound: {fileID: 337345651}
   MinDriftVolume: 0
-  MaxDriftVolume: 0.3
+  MaxDriftVolume: 0.5
   MinFrictionForSound: 10
   MaxFrictionForSound: 20
   DriftSoundSmoothness: 5
@@ -3466,8 +3466,9 @@ MonoBehaviour:
   heightOffset: 1
   lookAtHeightOffset: 1
   fieldOfView: 70
-  minDistance: 4
+  minDistance: 5
   maxDistance: 5
+  targetBikeObject: {fileID: 1027905431}
 --- !u!1 &968432912
 GameObject:
   m_ObjectHideFlags: 0
@@ -7151,7 +7152,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1621679457737969678, guid: 6c3f37a8a06c75c4b9407c1b31f0135a, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9197174707680787036, guid: 6c3f37a8a06c75c4b9407c1b31f0135a, type: 3}
       propertyPath: m_LocalPosition.x

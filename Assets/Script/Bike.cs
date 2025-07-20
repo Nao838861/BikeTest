@@ -156,6 +156,20 @@ public class Bike : MonoBehaviour
     private float rollErrorDerivativeValue = 0f; // エラーの微分値（デバッグ用）
     private float rollErrorIntegralValue = 0f;   // エラーの積分値（デバッグ用）
 
+    public Vector3 getFrontVector()
+    {
+        Vector3 ret = new Vector3(0,0,0);
+        // 両方のタイヤが浮いているか確認
+        bool isAirborne = !FrontWheel.IsGrounded && !RearWheel.IsGrounded;
+        if (!isAirborne)
+        {
+            ret = transform.forward*-10.0f;
+        }
+
+        return ret;
+
+    }
+
     // Start is called before the first frame update
     void Start()
     {
@@ -778,7 +792,7 @@ public class Bike : MonoBehaviour
                 float factor = -Input.GetAxis("Horizontal");
                 float lowSpeedExtraTorque = factor * torqueMultiplier;
                 totalTorque += lowSpeedExtraTorque;
-                Debug.Log("lowSpeedExtraTorque: " + lowSpeedExtraTorque);
+                //Debug.Log("lowSpeedExtraTorque: " + lowSpeedExtraTorque);
                 // 角速度を更新（トルク調整後）
                 float extraAcceleration = lowSpeedExtraTorque / HandleInertiaMoment;
                 HandleAngularVelocity += extraAcceleration * Time.fixedDeltaTime;

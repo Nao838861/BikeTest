@@ -195,7 +195,10 @@ public class TyreSpring : MonoBehaviour
             currentFrictionMagnitude = 0f;
             currentLateralFrictionMagnitude = 0f;
         }
-        
+
+        // ドリフト音を更新（横方向の摩擦力のみに基づく）
+        UpdateDriftSound();
+
         // デバッグ情報の更新（浮き状態の判定を含む）
         UpdateDebugInfo();
         
@@ -209,14 +212,16 @@ public class TyreSpring : MonoBehaviour
     {
         // DriftSoundが設定されていない場合は何もしない
         if (DriftSound == null) return;
-        
+
         // タイヤが浮いている場合や横方向の摩擦力が最小値より小さい場合は音を消す
         if (IsInAir || currentLateralFrictionMagnitude < MinFrictionForSound)
         {
+
             // タイヤが浮いている場合は即度0にする
             if (IsInAir)
             {
                 currentDriftVolume = 0f;
+                DriftSound.volume = currentDriftVolume;
                 if (DriftSound.isPlaying)
                 {
                     DriftSound.Stop();
@@ -405,9 +410,6 @@ public class TyreSpring : MonoBehaviour
         {
             currentLateralFrictionMagnitude = 0f;
         }
-        
-        // ドリフト音を更新（横方向の摩擦力のみに基づく）
-        UpdateDriftSound();
         
         // デバッグ情報を更新
         if (tyreDebug != null && frictionModel is FrictionCircleModel circleModel2)
