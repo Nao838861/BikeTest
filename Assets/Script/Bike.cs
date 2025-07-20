@@ -191,6 +191,52 @@ public class Bike : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // エンジン音を更新
+        UpdateEngineSound();
+    }
+    
+    /// <summary>
+    /// エンジン音を更新する
+    /// 速度と加速入力に基づいてピッチとボリュームを調整する
+    /// </summary>
+    private void UpdateEngineSound()
+    {
+        // EngineSoundが設定されているか確認
+        if (EngineSound == null) return;
+        
+        // 現在の速度を取得
+        float speed = rb.velocity.magnitude;
+        
+        // 速度に基づいてピッチを計算
+        float normalizedSpeed = Mathf.Clamp01(speed / 30.0f); // 30m/sを最大速度として正規化
+        float basePitch = Mathf.Lerp(MinEnginePitch, MaxEnginePitch, normalizedSpeed);
+        
+        // ターボ使用時はピッチを上げる、滑らかに補間する
+        float targetMultiplier = (isTurboActive && !isOverheated) ? TurboEnginePitchMultiplier : 1.0f;
+        
+        // 現在の乗数を目標値に向けて滑らかに補間
+        currentEnginePitchMultiplier = Mathf.Lerp(
+            currentEnginePitchMultiplier, 
+            targetMultiplier, 
+            Time.deltaTime * EnginePitchSmoothness
+        );
+        
+        // 最終的なピッチを計算
+        float finalPitch = basePitch * currentEnginePitchMultiplier;
+        
+        // 加速入力に基づいてボリュームを計算
+        float accelerationInput = Mathf.Abs(targetDriveInput);
+        float volume = Mathf.Lerp(MinEngineVolume, MaxEngineVolume, accelerationInput);
+        
+        // ピッチとボリュームを適用
+        EngineSound.pitch = finalPitch;
+        EngineSound.volume = volume;
+        
+        // エンジン音が再生されていない場合は再生開始
+        if (!EngineSound.isPlaying)
+        {
+            EngineSound.Play();
+        }
     }
     
     void FixedUpdate()
@@ -206,6 +252,12 @@ public class Bike : MonoBehaviour
         
         // 両方のタイヤが浮いているか確認
         bool isAirborne = !FrontWheel.IsGrounded && !RearWheel.IsGrounded;
+        
+        // 地面を走っている時のみ抗力を適用
+        if (!isAirborne)
+        {
+            ApplyGroundResistance();
+        }
         
         // 安定化力の適用
         // 両方のタイヤが空中に浮いているときは安定化力を適用しない
@@ -242,8 +294,43 @@ public class Bike : MonoBehaviour
     // オーバーヒート状態かどうか
     private bool isOverheated = false;
     
-    // オーバーヒート時の回復速度倍率
-    private float overheatRecoveryMultiplier = 2.0f;
+    // ターボ入力状態を保持する変数
+    private bool isTurboActive = false;
+    
+    // エンジン音のピッチ補間用の変数
+    private float currentEnginePitchMultiplier = 1.0f;
+    
+    // オーバーヒート回復倍率
+    public float overheatRecoveryMultiplier = 2.0f;
+    
+    [Header("地面抗力設定")]
+    [Tooltip("地面を走っている時の速度抗力係数")]
+    public float GroundResistanceCoefficient = 0.05f;
+    
+    [Tooltip("地面を走っている時の速度二乗に比例する抗力係数")]
+    public float GroundDragCoefficient = 0.01f;
+    
+    [Header("サウンド設定")]
+    [Tooltip("エンジン音のAudioSource")]
+    public AudioSource EngineSound;
+    
+    [Tooltip("エンジン音の最小ピッチ")]
+    public float MinEnginePitch = 0.5f;
+    
+    [Tooltip("エンジン音の最大ピッチ")]
+    public float MaxEnginePitch = 2.0f;
+    
+    [Tooltip("エンジン音の最小ボリューム")]
+    public float MinEngineVolume = 0.2f;
+    
+    [Tooltip("エンジン音の最大ボリューム")]
+    public float MaxEngineVolume = 1.0f;
+    
+    [Tooltip("ターボ使用時のエンジンピッチ倍率")]
+    public float TurboEnginePitchMultiplier = 1.3f;
+    
+    [Tooltip("エンジン音のピッチ変化の滑らかさ（値が小さいほど滑らか）")]
+    public float EnginePitchSmoothness = 5.0f;
     
     // ドリフト中の摩擦係数倍率
     [Header("ドリフト設定")]
@@ -289,6 +376,7 @@ public class Bike : MonoBehaviour
     {
         // Fire1、Fire2、Fire3、Fire4の入力を取得
         bool turboInput = Input.GetButton("Fire1");    // ターボ加速
+        isTurboActive = turboInput; // クラス変数に入力状態を保存
         bool accelerateInput = Input.GetButton("Fire3"); // 通常加速
         bool brakeInput = Input.GetButton("Fire2");     // 後退
         bool driftInput = Input.GetButton("Fire4");     // ドリフト
@@ -896,6 +984,32 @@ public class Bike : MonoBehaviour
     }
     
     
+    
+    /// <summary>
+    /// 地面を走っている時のみ受ける抗力を適用する
+    /// 速度に比例する抗力と速度の二乗に比例する抗力を適用する
+    /// </summary>
+    private void ApplyGroundResistance()
+    {
+        // 現在の速度を取得
+        Vector3 velocity = rb.velocity;
+        
+        // 地面に沿った速度成分を計算
+        Vector3 groundVelocity = Vector3.ProjectOnPlane(velocity, GroundNormal);
+        float speed = groundVelocity.magnitude;
+        
+        if (speed > 0.1f)
+        {
+            // 速度に比例する抗力
+            Vector3 linearResistance = -groundVelocity.normalized * speed * GroundResistanceCoefficient;
+            
+            // 速度の二乗に比例する抗力（空気抗力など）
+            Vector3 quadraticResistance = -groundVelocity.normalized * speed * speed * GroundDragCoefficient;
+            
+            // 合計抗力を適用
+            rb.AddForce(linearResistance + quadraticResistance, ForceMode.Force);
+        }
+    }
     
     /// <summary>
     /// バイクをリセットする
