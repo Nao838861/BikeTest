@@ -60,6 +60,20 @@ public class TyreSpring : MonoBehaviour
     public bool ShowDebug = true;
     [Tooltip("デバッグレイの色")]
     public Color DebugRayColor = Color.red;
+    
+    [Header("サウンド設定")]
+    [Tooltip("砂のドリフト音")]
+    public AudioSource DriftSound;
+    [Tooltip("ドリフト音の最小ボリューム")]
+    public float MinDriftVolume = 0.0f;
+    [Tooltip("ドリフト音の最大ボリューム")]
+    public float MaxDriftVolume = 1.0f;
+    [Tooltip("ドリフト音が鳴る最小摩擦力")]
+    public float MinFrictionForSound = 0.5f;
+    [Tooltip("最大音量になる摩擦力")]
+    public float MaxFrictionForSound = 5.0f;
+    [Tooltip("ドリフト音のピッチ変化の滑らかさ")]
+    public float DriftSoundSmoothness = 5.0f;
 
     public Rigidbody ParentRigidbody;
    
@@ -69,6 +83,20 @@ public class TyreSpring : MonoBehaviour
     private Vector3 SpringForce;
     private Vector3 DamperForce;
     private Vector3 TotalForce;
+    private float currentFrictionMagnitude; // 現在の摩擦力の大きさ
+    private float currentLateralFrictionMagnitude; // 現在の横方向摩擦力の大きさ
+    private float currentDriftVolume = 0f; // 現在のドリフト音量
+    
+    /// <summary>
+    /// タイヤが空中に浮いているかどうかを判定する
+    /// </summary>
+    private bool IsInAir
+    {
+        get
+        {
+            return !IsGrounded || CurrentLength >= MaxLength * 0.95f;
+        }
+    }
     // タイヤが地面に接地しているかどうかを示すプロパティ（publicに変更）
     public bool IsGrounded { get; private set; }
     private float IsGroundedTime; // 着地してからの経過時間
@@ -97,6 +125,13 @@ public class TyreSpring : MonoBehaviour
             Debug.LogError("TyreSpring: 親オブジェクトにRigidbodyが見つかりません");
             enabled = false;
             return;
+        }
+        
+        // ドリフト音が設定されている場合はループ再生に設定
+        if (DriftSound != null)
+        {
+            DriftSound.loop = true;
+            DriftSound.playOnAwake = false;
         }
         
         // 初期値設定
@@ -154,7 +189,72 @@ public class TyreSpring : MonoBehaviour
         {
             CalculateFrictionForce();
         }
+        else
+        {
+            // タイヤが浮いている場合は摩擦力を0に設定
+            currentFrictionMagnitude = 0f;
+            currentLateralFrictionMagnitude = 0f;
+        }
+        
+        // デバッグ情報の更新（浮き状態の判定を含む）
+        UpdateDebugInfo();
+        
         UpdateTyreVisual();
+    }
+    
+    /// <summary>
+    /// 横方向の摩擦力の大きさに応じてドリフト音を更新する
+    /// </summary>
+    private void UpdateDriftSound()
+    {
+        // DriftSoundが設定されていない場合は何もしない
+        if (DriftSound == null) return;
+        
+        // タイヤが浮いている場合や横方向の摩擦力が最小値より小さい場合は音を消す
+        if (IsInAir || currentLateralFrictionMagnitude < MinFrictionForSound)
+        {
+            // タイヤが浮いている場合は即度0にする
+            if (IsInAir)
+            {
+                currentDriftVolume = 0f;
+                if (DriftSound.isPlaying)
+                {
+                    DriftSound.Stop();
+                }
+            }
+            else
+            {
+                // 横方向の摩擦力が小さい場合は滑らかに音量を下げる
+                currentDriftVolume = Mathf.Lerp(currentDriftVolume, 0f, Time.deltaTime * DriftSoundSmoothness);
+                
+                // 音量が十分小さくなったら再生を停止
+                if (currentDriftVolume < 0.01f && DriftSound.isPlaying)
+                {
+                    DriftSound.Stop();
+                    currentDriftVolume = 0f;
+                }
+            }
+        }
+        else
+        {
+            // 横方向の摩擦力の大きさに基づいて音量を計算
+            float normalizedFriction = Mathf.Clamp01((currentLateralFrictionMagnitude - MinFrictionForSound) / 
+                                                   (MaxFrictionForSound - MinFrictionForSound));
+            
+            float targetVolume = Mathf.Lerp(MinDriftVolume, MaxDriftVolume, normalizedFriction);
+            
+            // 滑らかに音量を変化させる
+            currentDriftVolume = Mathf.Lerp(currentDriftVolume, targetVolume, Time.deltaTime * DriftSoundSmoothness);
+            
+            // 音量を適用
+            DriftSound.volume = currentDriftVolume;
+            
+            // 再生されていない場合は再生開始
+            if (!DriftSound.isPlaying && currentDriftVolume > 0.01f)
+            {
+                DriftSound.Play();
+            }
+        }
     }
     
     // タイヤの視覚化を更新
@@ -293,6 +393,22 @@ public class TyreSpring : MonoBehaviour
         // 摩擦力を適用
         ParentRigidbody.AddForceAtPosition(frictionForce, HitPoint);
         
+        // 摩擦力の大きさを記録
+        currentFrictionMagnitude = frictionForce.magnitude;
+        
+        // 横方向の摩擦力を計算
+        Vector3 lateralFrictionForce = Vector3.Project(frictionForce, transform.right);
+        currentLateralFrictionMagnitude = lateralFrictionForce.magnitude;
+        
+        // タイヤが浮いている場合は横方向の摩擦力を0に設定
+        if (!IsGrounded || CurrentLength >= MaxLength * 0.95f)
+        {
+            currentLateralFrictionMagnitude = 0f;
+        }
+        
+        // ドリフト音を更新（横方向の摩擦力のみに基づく）
+        UpdateDriftSound();
+        
         // デバッグ情報を更新
         if (tyreDebug != null && frictionModel is FrictionCircleModel circleModel2)
         {
@@ -310,6 +426,8 @@ public class TyreSpring : MonoBehaviour
             tyreDebug.FrictionCoefficient = circleModel2.GetFrictionCoefficient();
             tyreDebug.ContactVelocity = contactVelocity;
             tyreDebug.mFrictionCirclePow = circleModel2.GetFrictionCircleRadius();
+            
+            // タイヤが浮いているかどうかは別で設定する
         }
         
         // デバッグ用に駆動力を記録
@@ -340,6 +458,22 @@ public class TyreSpring : MonoBehaviour
     public Vector3 GetGroundNormal()
     {
         return IsGrounded ? groundNormal : Vector3.up;
+    }
+    
+    /// <summary>
+    /// デバッグ情報を更新する
+    /// </summary>
+    private void UpdateDebugInfo()
+    {
+        if (tyreDebug != null)
+        {
+            // タイヤが浮いているかどうかを設定
+            // IsInAirプロパティを使用して判定を一元化
+            tyreDebug.IsInAir = IsInAir;
+            
+            // ドリフト音のボリュームを設定
+            tyreDebug.DriftVolume = currentDriftVolume;
+        }
     }
     
     // デバッグ描画

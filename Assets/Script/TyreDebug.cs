@@ -45,6 +45,8 @@ public class TyreDebug : MonoBehaviour
     [HideInInspector] public Vector3 mAcc; // Car.csで使用されている加速度
     [HideInInspector] public float mMu; // Car.csで使用されている摩擦係数
     [HideInInspector] public float Speed; // バイクの速度（m/s）
+    [HideInInspector] public bool IsInAir; // タイヤが空中に浮いているかどうか
+    [HideInInspector] public float DriftVolume; // ドリフト音のボリューム
     
     // 速度計算用のRigidbody参照
     private Rigidbody cachedRigidbody;
@@ -122,19 +124,24 @@ public class TyreDebug : MonoBehaviour
         float speedKmh = Speed * 3.6f; // m/s から km/h に変換
         
         // デバッグ情報を表示
+        string airStatus = IsInAir ? "【浮き】" : "【接地】";
         string debugText = string.Format(
             "時速     : {0:F1} km/h\n" +
             "SlipAngle: {1:F1}°\n" +
             "Friction : {2:F2}\n" +
             "Force    : {3:F0}N\n" +
-            "FrictionCircle: {4:F0}",
+            "FrictionCircle: {4:F0}\n" +
+            "状態     : {5}\n" +
+            "ドリフト音 : {6:P0}",
             speedKmh,
             mSlipAngle,
             FrictionCoefficient,
             FrictionForce.magnitude,
-            mFrictionCirclePow
+            mFrictionCirclePow,
+            airStatus,
+            DriftVolume // ドリフト音のボリュームを追加
         );
-        GUI.Label(new Rect(screenPos.x, screenPos.y + yOffset, 300, 100), debugText, style);
+        GUI.Label(new Rect(screenPos.x, screenPos.y + yOffset, 300, 120), debugText, style);
         
         // 摩擦円の表示
         DrawFrictionCircle(screenPos);

@@ -207,9 +207,22 @@ public class Bike : MonoBehaviour
         // 現在の速度を取得
         float speed = rb.velocity.magnitude;
         
-        // 速度に基づいてピッチを計算
-        float normalizedSpeed = Mathf.Clamp01(speed / 30.0f); // 30m/sを最大速度として正規化
-        float basePitch = Mathf.Lerp(MinEnginePitch, MaxEnginePitch, normalizedSpeed);
+        // 加速入力の強さを取得
+        float accelerationInput = Mathf.Abs(targetDriveInput);
+        
+        // アクセルを押していない場合はアイドリングピッチを使用
+        float basePitch;
+        if (accelerationInput < 0.01f)
+        {
+            // アクセルなしの場合はアイドリングピッチ
+            basePitch = IdleEnginePitch;
+        }
+        else
+        {
+            // 速度とアクセル入力に基づいてピッチを計算
+            float normalizedSpeed = Mathf.Clamp01(speed / 30.0f); // 30m/sを最大速度として正規化
+            basePitch = Mathf.Lerp(MinEnginePitch, MaxEnginePitch, normalizedSpeed);
+        }
         
         // ターボ使用時はピッチを上げる、滑らかに補間する
         float targetMultiplier = (isTurboActive && !isOverheated) ? TurboEnginePitchMultiplier : 1.0f;
@@ -225,7 +238,6 @@ public class Bike : MonoBehaviour
         float finalPitch = basePitch * currentEnginePitchMultiplier;
         
         // 加速入力に基づいてボリュームを計算
-        float accelerationInput = Mathf.Abs(targetDriveInput);
         float volume = Mathf.Lerp(MinEngineVolume, MaxEngineVolume, accelerationInput);
         
         // ピッチとボリュームを適用
@@ -319,6 +331,9 @@ public class Bike : MonoBehaviour
     
     [Tooltip("エンジン音の最大ピッチ")]
     public float MaxEnginePitch = 2.0f;
+    
+    [Tooltip("アクセルを押していない時のアイドリングピッチ")]
+    public float IdleEnginePitch = 0.6f;
     
     [Tooltip("エンジン音の最小ボリューム")]
     public float MinEngineVolume = 0.2f;
