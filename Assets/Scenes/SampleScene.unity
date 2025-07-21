@@ -3932,6 +3932,7 @@ MonoBehaviour:
   DriftLeanYawMultiplier: 1.5
   DriftLeanSpeedMultiplier: 2
   TurboDriftRotationMultiplier: 1.8
+  TurboDriftSpeedMultiplier: 0.7
   ResetHeightOffset: 1.5
   ResetVelocityDamping: 0.9
   MaxTurboGauge: 100
@@ -7274,7 +7275,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: df8cf12eb8f32584086acfc163bc62d6, type: 2}
+  - {fileID: 2100000, guid: c4d234bf45bcb024daf53bf30c1f2e7e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

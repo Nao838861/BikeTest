@@ -384,6 +384,9 @@ public class Bike : MonoBehaviour
     // ドリフト中のターボ使用時の回転速度倍率
     public float TurboDriftRotationMultiplier = 1.8f;
     
+    // ドリフト中のターボ使用時の速度低下倍率（1.0未満の値で速度が低下）
+    public float TurboDriftSpeedMultiplier = 0.7f;
+    
     [Header("リセット設定")]
     [Tooltip("リセット時の高さオフセット（メートル）")]
     public float ResetHeightOffset = 1.5f;
@@ -623,6 +626,10 @@ public class Bike : MonoBehaviour
         }
     }
     
+    [Header("低速ブースト設定")]
+    public float LowSpeedBoostThreshold = 8.33f; // 時速30km（約8.33 m/s）
+    public float LowSpeedBoostMultiplier = 1.5f; // 低速時のブースト倍率
+    
     // 駆動力の適用
     void ApplyDriveForce()
     {
@@ -635,9 +642,37 @@ public class Bike : MonoBehaviour
         
         // 速度に応じた駆動力の調整係数を計算
         float speedFactor = 1.0f;
-        if (rb != null && rb.velocity.magnitude > 0)
+        if (rb != null)
         {
             float speed = rb.velocity.magnitude;
+            
+            // 低速時（時速30km以下）はアクセルの力を強くする
+            if (speed < LowSpeedBoostThreshold && CurrentDriveInput > 0)
+            {
+                // 速度が遅いほどブースト効果が大きくなる
+                float boostRatio = 1.0f - (speed / LowSpeedBoostThreshold);
+                float boostMultiplier = Mathf.Lerp(1.0f, LowSpeedBoostMultiplier, boostRatio);
+                
+                // アクセル入力を増強
+                CurrentDriveInput *= boostMultiplier;
+            }
+            
+            // ドリフト中のターボ使用時は速度を低下させる
+            if (driftEffectStrength > 0.01f && isTurboActive && !isOverheated)
+            {
+                // 傾き角度を取得
+                float rollAngleDegrees = Mathf.Abs(CurrentRollAngle);
+                
+                // 傾きが大きいほど速度低下が大きくなる（最大40度で最大効果）
+                float leanFactor = Mathf.Clamp01(rollAngleDegrees / 40.0f);
+                
+                // ドリフト強度と傾き角度に応じた速度低下倍率を計算
+                float driftTurboSpeedMultiplier = Mathf.Lerp(1.0f, TurboDriftSpeedMultiplier, leanFactor * driftEffectStrength);
+                
+                // 速度を低下させる力を適用
+                Vector3 slowDownForce = -rb.velocity.normalized * speed * (1.0f - driftTurboSpeedMultiplier) * 2.0f;
+                rb.AddForce(slowDownForce, ForceMode.Acceleration);
+            }
             
             // 最大速度を超えると加速力が減少する
             if (speed > MaxSpeedThreshold)
@@ -873,9 +908,21 @@ public class Bike : MonoBehaviour
     {
         if (!ShowDebugInfo) return;
         
+        // 通常のデバッグ情報を右上に表示
+        DisplayDebugInfo();
+        
+        // ターボゲージを画面中央下に表示
+        DisplayTurboGauge();
+    }
+    
+    /// <summary>
+    /// 通常のデバッグ情報を右上に表示する
+    /// </summary>
+    private void DisplayDebugInfo()
+    {
         // デバッグ情報の表示位置とサイズを設定
         int width = 300;
-        int height = 380; // ターボゲージ情報用に高さを増やす
+        int height = 270;
         int padding = 10;
         int lineHeight = 20;
         
@@ -909,42 +956,77 @@ public class Bike : MonoBehaviour
         y += lineHeight;
         GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID出力: {pidOutputValue:F3}", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ホイールベース: {CurrentWheelBase:F2} m", textStyle);
-        y += lineHeight;
         GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"地面法線: {GroundNormal.ToString("F2")}", textStyle);
         y += lineHeight;
         
-        // ドリフト情報を表示
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ドリフト強度: {DebugDriftStrength:F2}", textStyle);
+        // 速度情報の表示
+        float currentSpeed = 0f;
+        float speedKmh = 0f;
+        if (rb != null)
+        {
+            currentSpeed = rb.velocity.magnitude;
+            speedKmh = currentSpeed * 3.6f; // m/sからkm/hに変換
+        }
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"速度: {speedKmh:F1} km/h", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"傾き係数: {DebugLeanFactor:F2}", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"最大速度: {MaxSpeedThreshold * 3.6f:F1} km/h", textStyle);
         y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"方向倍率: {DebugDirectionMultiplier:F2}", textStyle);
-        y += lineHeight;
-        
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"セルフステア: {(EnableSelfSteer ? "ON" : "OFF")}", textStyle);
-        y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"キャスター効果: {(EnableCasterEffect ? "ON" : "OFF")}", textStyle);
-        y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"PID制御: {(EnablePIDControl ? "ON" : "OFF")}", textStyle);
-        y += lineHeight;
-        
-        // ターボゲージ情報を表示
-        string turboStatus = isOverheated ? "オーバーヒート" : "使用可能";
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ターボゲージ: {currentTurboGauge:F1} / {MaxTurboGauge:F0} ({turboStatus})", textStyle);
+        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力中の中心化倍率: {SteeringCenteringMultiplier:F2}", textStyle);
         y += lineHeight;
         
+        // 使用したリソースの解放
+        Object.Destroy(backgroundTexture);
+    }
+    
+    /// <summary>
+    /// ターボゲージを画面中央下に表示する
+    /// </summary>
+    private void DisplayTurboGauge()
+    {
+        // ターボゲージの表示位置とサイズを設定
+        int gaugeWidth = 300;
+        int gaugeHeight = 80;
+        int padding = 20;
+        int lineHeight = 20;
+        
+        // 画面中央下に配置
+        int posX = (Screen.width - gaugeWidth) / 2;
+        int posY = Screen.height - gaugeHeight - padding;
+        
+        // 背景を表示
+        Texture2D backgroundTexture = new Texture2D(1, 1);
+        backgroundTexture.SetPixel(0, 0, new Color(0, 0, 0, 0.5f));
+        backgroundTexture.Apply();
+        
+        GUIStyle backgroundStyle = new GUIStyle();
+        backgroundStyle.normal.background = backgroundTexture;
+        
+        //GUI.Box(new Rect(posX, posY, gaugeWidth, gaugeHeight), "", backgroundStyle);
+        
+        // テキストスタイルの設定
+        GUIStyle textStyle = new GUIStyle();
+        textStyle.normal.textColor = Color.white;
+        textStyle.fontSize = 16;
+        textStyle.alignment = TextAnchor.MiddleCenter;
+        
+        // ターボゲージのタイトルと状態を表示
+        int y = posY + padding;
+        /*
+        string turboStatus = isOverheated ? "OVERHEAT" : "";
+        GUI.Label(new Rect(posX, y, gaugeWidth, lineHeight), $"TEMP {currentTurboGauge:F1} / {MaxTurboGauge:F0} ({turboStatus})", textStyle);
+        y += lineHeight + 5;
+        */
         // ターボゲージのバーを表示
-        float gaugeWidth = width - 40;
-        float gaugeHeight = 10;
-        float gaugeX = Screen.width - width - padding + 20;
-        float gaugeY = y;
+        float barWidth = gaugeWidth - padding * 2;
+        float barHeight = 15;
+        float barX = posX + padding;
+        float barY = y;
         
         // 背景バー
-        GUI.Box(new Rect(gaugeX, gaugeY, gaugeWidth, gaugeHeight), "", new GUIStyle(GUI.skin.box));
+        GUI.Box(new Rect(barX, barY, barWidth, barHeight), "", new GUIStyle(GUI.skin.box));
         
         // ゲージの割合を計算
-        float gaugeFillWidth = (currentTurboGauge / MaxTurboGauge) * gaugeWidth;
+        float gaugeFillWidth = (currentTurboGauge / MaxTurboGauge) * barWidth;
         
         // ゲージの色を設定
         Color gaugeColor;
@@ -953,9 +1035,9 @@ public class Bike : MonoBehaviour
             // オーバーヒート時は赤
             gaugeColor = Color.red;
         }
-        else if (currentTurboGauge < MaxTurboGauge * 0.1f)
+        else if (currentTurboGauge < MaxTurboGauge * 0.20f)
         {
-            // 残量10%以下は黄色
+            // 残量20%以下は黄色
             gaugeColor = Color.yellow;
         }
         else
@@ -970,32 +1052,11 @@ public class Bike : MonoBehaviour
         gaugeTexture.Apply();
         
         // ゲージを描画
-        GUI.DrawTexture(new Rect(gaugeX, gaugeY, gaugeFillWidth, gaugeHeight), gaugeTexture);
+        GUI.DrawTexture(new Rect(barX, barY, gaugeFillWidth, barHeight), gaugeTexture);
         
         // テクスチャを破棄
-        Destroy(gaugeTexture);
-        
-        y += lineHeight + 5;
-            
-        // 速度情報の表示
-        float currentSpeed = 0f;
-        float speedKmh = 0f;
-        if (rb != null)
-        {
-            currentSpeed = rb.velocity.magnitude;
-            speedKmh = currentSpeed * 3.6f; // m/sからkm/hに変換
-        }
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"速度: {speedKmh:F1} km/h", textStyle);
-        y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"最大速度: {MaxSpeedThreshold * 3.6f:F1} km/h", textStyle);
-        y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力: {(isSteeringInput ? "ON" : "OFF")}", textStyle);
-        y += lineHeight;
-        GUI.Label(new Rect(Screen.width - width - padding + 10, y, width - 20, lineHeight), $"ハンドル入力中の中心化倍率: {SteeringCenteringMultiplier:F2}", textStyle);
-        y += lineHeight;
-        
-        // 使用したリソースの解放
         Object.Destroy(backgroundTexture);
+        Object.Destroy(gaugeTexture);
     }
         
         /// <summary>
