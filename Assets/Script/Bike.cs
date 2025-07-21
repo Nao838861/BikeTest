@@ -647,7 +647,8 @@ public class Bike : MonoBehaviour
             float speed = rb.velocity.magnitude;
             
             // 低速時（時速30km以下）はアクセルの力を強くする
-            if (speed < LowSpeedBoostThreshold && CurrentDriveInput > 0)
+            // ただし、ターボ使用時は低速ブーストを適用しない
+            if (speed < LowSpeedBoostThreshold && CurrentDriveInput > 0 && !isTurboActive)
             {
                 // 速度が遅いほどブースト効果が大きくなる
                 float boostRatio = 1.0f - (speed / LowSpeedBoostThreshold);
