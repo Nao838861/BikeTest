@@ -854,8 +854,18 @@ public class Bike : MonoBehaviour
         
 
     
+    [Header("空中制御設定")]
+    [Tooltip("空中で前傾時の前方加速力の強さ")]
+    public float AirForwardThrustStrength = 10.0f;
+    [Tooltip("空中で前傾加速が有効になる最小角度（度）")]
+    public float AirForwardThrustMinAngle = 10.0f;
+    [Tooltip("空中で前傾加速が最大になる角度（度）")]
+    public float AirForwardThrustMaxAngle = 45.0f;
+    [Tooltip("前傾加速が有効になる左右の傾きの最大角度（度）")]
+    public float MaxRollAngleForForwardThrust = 15.0f;
+    
     /// <summary>
-    /// 空中での回転減衰を適用する
+    /// 空中での回転減衰と制御を適用する
     /// </summary>
     private void ApplyAirRotationDamping()
     {
@@ -869,6 +879,33 @@ public class Bike : MonoBehaviour
         
         // 新しい角速度を設定
         rb.angularVelocity = angularVelocity;
+        
+        // 前後の傾き（ピッチ角）と左右の傾き（ロール角）を確認
+        // 前方に傾いており、かつ左右の傾きが少ない場合のみ加速力を適用
+        if (CurrentPitchAngle < -AirForwardThrustMinAngle && // マイナスの値は前方に傾いていることを示す
+            Mathf.Abs(CurrentRollAngle) < MaxRollAngleForForwardThrust) // 左右の傾きが指定範囲内
+        {
+            // 傾き角度に応じた加速力の強さを計算（角度が大きいほど強い加速力）
+            float thrustFactor = Mathf.Clamp01(Mathf.Abs(CurrentPitchAngle) - AirForwardThrustMinAngle) / 
+                                (AirForwardThrustMaxAngle - AirForwardThrustMinAngle);
+            
+            // ロール角度に基づく加速力の減衰係数を計算
+            // ロール角度が0度に近いほど加速力が強くなる
+            float rollFactor = 1.0f - (Mathf.Abs(CurrentRollAngle) / MaxRollAngleForForwardThrust);
+            
+            // バイクの前方方向を取得
+            Vector3 forwardDirection = -transform.forward;
+            
+            // 前方への加速力を適用（ピッチ角度とロール角度の両方を考慮）
+            Vector3 forwardThrust = forwardDirection * AirForwardThrustStrength * thrustFactor * rollFactor;
+            rb.AddForce(forwardThrust, ForceMode.Acceleration);
+            
+            // デバッグ情報があれば表示
+            if (ShowDebugInfo)
+            {
+                Debug.DrawRay(transform.position, forwardThrust, Color.blue, 0.1f);
+            }
+        }
     }
     
     /// <summary>
@@ -895,10 +932,25 @@ public class Bike : MonoBehaviour
         CurrentRollAngle = Vector3.Angle(rightVector, projectedRight) * rollSign;
         
         // 前後方向の傾き角度（ピッチ）を計算
+        // ワールド座標系での傾きを計算するため、Vector3.up（ワールドの上方向）を使用
         Vector3 forwardVector = transform.forward;
-        Vector3 projectedForward = Vector3.ProjectOnPlane(forwardVector, GroundNormal).normalized;
-        float pitchSign = Vector3.Dot(transform.up, Vector3.Cross(forwardVector, projectedForward)) < 0 ? -1 : 1;
-        CurrentPitchAngle = Vector3.Angle(forwardVector, projectedForward) * pitchSign;
+        Vector3 horizontalForward = new Vector3(forwardVector.x, 0, forwardVector.z).normalized;
+        
+        // バイクの前方ベクトルと水平面上の前方ベクトルの角度を計算
+        float pitchAngle = Vector3.Angle(forwardVector, horizontalForward);
+        
+        // 前傾きか後傾きかの符号を決定（前傾きはプラス、後傾きはマイナス）
+        float pitchSign = forwardVector.y < 0 ? 1 : -1;
+        
+        // 最終的なピッチ角度を設定
+        CurrentPitchAngle = pitchAngle * pitchSign;
+        
+        // デバッグ表示用に実際の前方ベクトルを可視化
+        if (ShowDebugInfo)
+        {
+            Debug.DrawRay(transform.position, forwardVector * 3, Color.red, 0.1f);
+            Debug.DrawRay(transform.position, horizontalForward * 3, Color.green, 0.1f);
+        }
         
     }
 
