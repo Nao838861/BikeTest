@@ -1232,6 +1232,7 @@ public class Bike : MonoBehaviour
     /// バイクの安定化力をPID制御で適用する
     /// プレイヤーの入力（targetLeanAngle）を目標角度として使用
     /// ロール（左右の傾き）のみを補正し、ピッチ（前後の傾き）は補正しない
+    /// ワールドY軸を基準に安定化力を適用する
     /// </summary>
     void ApplyStabilizationForce()
     {
@@ -1241,13 +1242,16 @@ public class Bike : MonoBehaviour
         Vector3 currentUp = transform.up;
         Vector3 currentForward = transform.forward;
         
-        // バイクの前後方向を実際の地面に投影
-        Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, GroundNormal).normalized;
-        Vector3 bikeRight = Vector3.Cross(forwardOnGround, GroundNormal).normalized;
+        // ワールドY軸を基準に計算するため、Vector3.upを使用
+        Vector3 worldUp = Vector3.up;
         
-        // 現在の左右の傾き角度を計算
+        // バイクの前後方向をワールド水平面に投影
+        Vector3 forwardOnGround = Vector3.ProjectOnPlane(currentForward, worldUp).normalized;
+        Vector3 bikeRight = Vector3.Cross(forwardOnGround, worldUp).normalized;
+        
+        // 現在の左右の傾き角度を計算（ワールドY軸基準）
         Vector3 sideProjection = Vector3.ProjectOnPlane(currentUp, forwardOnGround).normalized;
-        float currentRollAngle = Vector3.SignedAngle(GroundNormal, sideProjection, forwardOnGround);
+        float currentRollAngle = Vector3.SignedAngle(worldUp, sideProjection, forwardOnGround);
         
         // プレイヤーの入力を目標角度として使用
         float targetRollAngle = targetLeanAngle;
