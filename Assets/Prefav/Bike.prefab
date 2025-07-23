@@ -489,7 +489,7 @@ MonoBehaviour:
   VisualSmoothness: 50
   ShowDebug: 1
   DebugRayColor: {r: 1, g: 0, b: 0, a: 1}
-  DriftSound: {fileID: 8836580062359410899}
+  DriftSound: {fileID: 6353002605038559755}
   MinDriftVolume: 0
   MaxDriftVolume: 0.5
   MinFrictionForSound: 10
@@ -558,7 +558,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4730006684506515788}
-  - {fileID: 8836580062359410898}
+  - {fileID: 361197358156767885}
   m_Father: {fileID: 8040057953328030808}
   m_LocalEulerAnglesHint: {x: 60, y: 90, z: 180}
 --- !u!1 &5311132220767347719
@@ -706,13 +706,13 @@ MonoBehaviour:
   ResetVelocityDamping: 0.9
   MaxTurboGauge: 100
   TurboConsumptionRate: 30
-  TurboRecoveryRate: 10
+  TurboRecoveryRate: 12.5
   MinTurboThreshold: 10
   LowSpeedBoostThreshold: 8.33
   LowSpeedBoostMultiplier: 1.1
-  AirForwardThrustStrength: 1000
+  AirForwardThrustStrength: 150
   AirForwardThrustMinAngle: 5
-  AirForwardThrustMaxAngle: 45
+  AirForwardThrustMaxAngle: 15
   MaxRollAngleForForwardThrust: 15
 --- !u!1 &6044688090867298132
 GameObject:
@@ -1363,12 +1363,12 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 810d58e0b36ed1c4e9320b695dd7a23f, type: 3}
---- !u!4 &8836580062359410898 stripped
+--- !u!4 &361197358156767885 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 9197174707680787036, guid: 810d58e0b36ed1c4e9320b695dd7a23f, type: 3}
   m_PrefabInstance: {fileID: 8836580062359410897}
   m_PrefabAsset: {fileID: 0}
---- !u!82 &8836580062359410899 stripped
+--- !u!82 &6353002605038559755 stripped
 AudioSource:
   m_CorrespondingSourceObject: {fileID: 2489277326681914074, guid: 810d58e0b36ed1c4e9320b695dd7a23f, type: 3}
   m_PrefabInstance: {fileID: 8836580062359410897}
