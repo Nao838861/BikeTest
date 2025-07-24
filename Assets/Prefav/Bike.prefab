@@ -668,6 +668,12 @@ MonoBehaviour:
   StabilizationD: 3
   IntegralMax: 10
   TargetUpDirection: {x: 0, y: 1, z: 0}
+  EnableCentrifugalStabilization: 1
+  MaxCentrifugalSpeed: 60
+  MinCentrifugalSpeed: 20
+  MaxCentrifugalInfluence: 0
+  MinSurfaceNormalInfluence: 0
+  StabilizationSmoothingFactor: 5000
   LeanStrength: 160
   MaxLeanAngle: 40
   LeanSmoothness: 2
@@ -706,7 +712,7 @@ MonoBehaviour:
   ResetVelocityDamping: 0.9
   MaxTurboGauge: 100
   TurboConsumptionRate: 30
-  TurboRecoveryRate: 12.5
+  TurboRecoveryRate: 13.5
   MinTurboThreshold: 10
   LowSpeedBoostThreshold: 8.33
   LowSpeedBoostMultiplier: 1.1

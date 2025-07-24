@@ -63,6 +63,8 @@ public class Bike : MonoBehaviour
     [Header("安定化設定")]
     [Tooltip("安定化機能を有効にするかどうか")]
     public bool EnableStabilization = true;
+    [Tooltip("遠心力安定化機能を有効にするかどうか")]
+    public bool EnableCentrifugalStabilization = true;
     [Tooltip("安定化の比例項ゲイン")]
     public float StabilizationP = 20.0f;
     [Tooltip("安定化の積分項ゲイン")]
@@ -73,6 +75,16 @@ public class Bike : MonoBehaviour
     public float IntegralMax = 10.0f;
     [Tooltip("目標の上向きベクトル（通常はVector3.up）")]
     public Vector3 TargetUpDirection = Vector3.up;
+    [Tooltip("遠心力の影響を受け始める最低速度（m/s）")]
+    public float MinCentrifugalSpeed = 2.0f;
+    [Tooltip("遠心力の影響が最大になる速度（m/s）")]
+    public float MaxCentrifugalSpeed = 15.0f;
+    [Tooltip("遠心力の最大影響度（0-1）")]
+    public float MaxCentrifugalInfluence = 0.8f;
+    [Tooltip("安定化方向の平滑化係数（値が大きいほど滑らか）")]
+    public float StabilizationSmoothness = 5.0f;
+    [Tooltip("デバッグ表示を有効にするかどうか")]
+    public bool EnableDebugDisplay = false;
     
     [Header("傾き設定")]
     [Tooltip("ハンドル操作による傾きの強さ（値が大きいほど強く傾く）")]
@@ -1232,7 +1244,7 @@ public class Bike : MonoBehaviour
     /// バイクの安定化力をPID制御で適用する
     /// プレイヤーの入力（targetLeanAngle）を目標角度として使用
     /// ロール（左右の傾き）のみを補正し、ピッチ（前後の傾き）は補正しない
-    /// ワールドY軸を基準に安定化力を適用する
+    /// 遠心力と地形法線を考慮した安定化を行う
     /// </summary>
     void ApplyStabilizationForce()
     {
@@ -1256,7 +1268,7 @@ public class Bike : MonoBehaviour
         // プレイヤーの入力を目標角度として使用
         float targetRollAngle = targetLeanAngle;
         
-        // 速度に応じて目標角度を調整（低速時は傾きを抑制）
+        // 速度と方向を取得
         Vector3 velocity = rb.velocity;
         float speed = velocity.magnitude;
         
@@ -1269,18 +1281,70 @@ public class Bike : MonoBehaviour
             targetRollAngle *= angleFactor;
         }
         
+        // 目標上向きベクトルを初期化（デフォルトはワールドY軸）
+        Vector3 targetUpVector = worldUp;
+        
+        // 遠心力安定化が有効で、速度が最低閾値を超えている場合
+        if (EnableCentrifugalStabilization && speed > MinCentrifugalSpeed)
+        {
+            // 速度ベクトルを水平面に投影して方向を取得
+            Vector3 velocityOnGround = Vector3.ProjectOnPlane(velocity, worldUp).normalized;
+            
+            // 曲率（角速度）を計算 - バイクの回転速度から前方向の成分を抽出
+            float angularSpeed = Vector3.Dot(rb.angularVelocity, transform.up);
+            
+            // 遠心力方向を計算（速度方向に垂直で水平な方向）
+            Vector3 centrifugalDir = Vector3.Cross(worldUp, velocityOnGround).normalized;
+            
+            // 角速度の符号に基づいて遠心力の方向を調整
+            if (angularSpeed < 0)
+            {
+                centrifugalDir = -centrifugalDir;
+            }
+            
+            // 遠心力の強さを計算（速度の二乗に比例、角速度の大きさに比例）
+            float centrifugalStrength = speed * Mathf.Abs(angularSpeed) * 0.1f;
+            
+            // 速度に基づく遠心力の影響度を計算（MinCentrifugalSpeedからMaxCentrifugalSpeedまでの範囲で線形補間）
+            float speedFactor = Mathf.Clamp01((speed - MinCentrifugalSpeed) / (MaxCentrifugalSpeed - MinCentrifugalSpeed));
+            float centrifugalInfluence = speedFactor * MaxCentrifugalInfluence;
+            
+            // 地形の法線を考慮した上向きベクトルを計算
+            Vector3 terrainUpVector = GroundNormal;
+            
+            // 遠心力方向と地形法線を考慮した目標上向きベクトルを計算
+            Vector3 centrifugalUpVector = Vector3.Lerp(terrainUpVector, centrifugalDir, centrifugalInfluence).normalized;
+            
+            // 最終的な目標上向きベクトルを設定
+            targetUpVector = centrifugalUpVector;
+            
+            // デバッグ表示用に遠心力ベクトルを保存
+            if (EnableDebugDisplay)
+            {
+                Debug.DrawRay(transform.position, centrifugalDir * 2.0f, Color.red);
+                Debug.DrawRay(transform.position, targetUpVector * 2.0f, Color.green);
+                Debug.DrawRay(transform.position, terrainUpVector * 2.0f, Color.blue);
+            }
+        }
+        
+        // 目標上向きベクトルに基づいて目標ロール角度を調整
+        if (EnableCentrifugalStabilization && speed > MinCentrifugalSpeed)
+        {
+            // 目標上向きベクトルを前方向に垂直な平面に投影
+            Vector3 targetSideProjection = Vector3.ProjectOnPlane(targetUpVector, forwardOnGround).normalized;
+            
+            // 目標ロール角度を計算（ワールドY軸と目標上向きベクトルの角度）
+            float targetUpRollAngle = Vector3.SignedAngle(worldUp, targetSideProjection, forwardOnGround);
+            
+            // プレイヤー入力による目標角度と遠心力による目標角度を合成
+            targetRollAngle = targetRollAngle + targetUpRollAngle;
+        }
+        
         // PID制御の計算
         float rollError = targetRollAngle - currentRollAngle;
         
         // 積分項の計算（積分ワインドアップ防止）
         rollErrorIntegral += rollError * Time.fixedDeltaTime;
-        /*
-        // 動的減衰：エラーが小さい時は積分値を減衰
-        if (Mathf.Abs(rollError) < 2.0f)
-        {
-            rollErrorIntegral *= 0.98f; // 毎フレーム2%減衰
-        }
-        */
         rollErrorIntegral = Mathf.Clamp(rollErrorIntegral, -IntegralMax, IntegralMax);
         
         // 微分項の計算
