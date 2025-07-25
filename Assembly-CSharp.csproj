@@ -54,6 +54,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Assets\Script\ReadOnlyAttribute.cs" />
+    <Compile Include="Assets\Script\LapTimer.cs" />
     <Compile Include="Assets\Script\Car.cs" />
     <Compile Include="Assets\Script\BikeCamera.cs" />
     <Compile Include="Assets\Script\SceneManager.cs" />

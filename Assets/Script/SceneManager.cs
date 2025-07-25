@@ -58,8 +58,8 @@ public class SceneChanger : MonoBehaviour
         if (showSceneNameOnGUI)
         {
             string currentScene = SceneManager.GetActiveScene().name;
-            GUI.Label(new Rect(10, 10, 300, 20), $"現在のシーン: {currentScene}");
-            GUI.Label(new Rect(10, 30, 300, 20), "F1: SampleScene / F2: TerrainScene");
+            //GUI.Label(new Rect(10, 10, 300, 20), $"現在のシーン: {currentScene}");
+            //GUI.Label(new Rect(10, 30, 300, 20), "F1: SampleScene / F2: TerrainScene");
         }
     }
 }

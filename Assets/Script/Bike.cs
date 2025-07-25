@@ -123,6 +123,23 @@ public class Bike : MonoBehaviour
     public bool ShowForceVectors = true;
     public float ForceVectorScale = 0.1f;
     
+    [Header("スピード表示設定")]
+    public bool ShowSpeedometer = true;
+    public bool ShowTurboGauge = true;
+    public Color SpeedTextColor = Color.white;
+    public Color TurboGaugeColor = Color.yellow;
+    
+    [Header("コース判定設定")]
+    [Tooltip("コース判定用のレイキャスト距離")]
+    public float CourseCheckRayDistance = 5.0f;
+    [Tooltip("コースとして認識するレイヤー名")]
+    public string CourseLayerName = "BG";
+    [Tooltip("コース外判定の表示をデバッグ表示するかどうか")]
+    public bool ShowCourseCheckDebug = false;
+    [Tooltip("現在コース内にいるかどうか（読み取り専用）")]
+    [ReadOnly]
+    public bool IsOnCourse = true;
+    
     [Header("地面情報")]
     [Tooltip("地面の法線ベクトル（デバッグ表示用）")]
     [ReadOnly]
@@ -281,6 +298,9 @@ public class Bike : MonoBehaviour
     {
         // 地面の法線を更新
         UpdateGroundNormal();
+        
+        // コース内外判定
+        CheckIfOnCourse();
         
         // キーボード入力の処理
         ProcessInput();
@@ -1088,11 +1108,7 @@ public class Bike : MonoBehaviour
         
         // ターボゲージのタイトルと状態を表示
         int y = posY + padding;
-        /*
-        string turboStatus = isOverheated ? "OVERHEAT" : "";
-        GUI.Label(new Rect(posX, y, gaugeWidth, lineHeight), $"TEMP {currentTurboGauge:F1} / {MaxTurboGauge:F0} ({turboStatus})", textStyle);
-        y += lineHeight + 5;
-        */
+
         // ターボゲージのバーを表示
         float barWidth = gaugeWidth - padding * 2;
         float barHeight = 15;
@@ -1134,6 +1150,24 @@ public class Bike : MonoBehaviour
         // テクスチャを破棄
         Object.Destroy(backgroundTexture);
         Object.Destroy(gaugeTexture);
+
+        // ここで時速を表示
+        if (ShowSpeedometer)
+        {
+            // 速度をkm/hに変換（m/s * 3.6 = km/h）
+            float speedKmh = rb.velocity.magnitude * 3.6f;
+            
+            // 速度表示用のスタイル
+            GUIStyle speedStyle = new GUIStyle();
+            speedStyle.normal.textColor = SpeedTextColor;
+            speedStyle.fontSize = 16;
+            speedStyle.fontStyle = FontStyle.Bold;
+            speedStyle.alignment = TextAnchor.MiddleRight;
+            
+            // ターボゲージの右側に速度を表示
+            GUI.Label(new Rect(barX + barWidth + 10, barY, 100, barHeight), $"{Mathf.RoundToInt(speedKmh)} km/h", speedStyle);
+        }
+
     }
         
         /// <summary>
@@ -1250,6 +1284,49 @@ public class Bike : MonoBehaviour
         
         // 法線ベクトルを更新
         GroundNormal = normal;
+    }
+    
+    /// <summary>
+    /// レイキャストを使用してコース内外を判定する
+    /// </summary>
+    private void CheckIfOnCourse()
+    {
+        // レイキャストの始点と方向を設定
+        Vector3 rayStart = transform.position + Vector3.up * 0.5f; // 少し高めの位置からレイを飛ばす
+        Vector3 rayDirection = Vector3.down;
+        
+        // レイヤーマスクを設定
+        int courseLayerMask = 1 << LayerMask.NameToLayer(CourseLayerName);
+        
+        // レイキャストを実行
+        RaycastHit hit;
+        bool hitCourse = Physics.Raycast(rayStart, rayDirection, out hit, CourseCheckRayDistance, courseLayerMask);
+        
+        // 前回の状態を保存
+        bool wasOnCourse = IsOnCourse;
+        
+        // コースレイヤーに当たった場合はコース内、それ以外はコース外
+        IsOnCourse = hitCourse;
+        
+        // コース内外状態が変化した場合にログを出力
+        if (wasOnCourse != IsOnCourse)
+        {
+            if (IsOnCourse)
+            {
+                Debug.Log("コース内に戻りました");
+            }
+            else
+            {
+                Debug.Log("コース外に出ました");
+            }
+        }
+        
+        // デバッグ表示
+        if (ShowCourseCheckDebug)
+        {
+            Color rayColor = IsOnCourse ? Color.green : Color.red;
+            Debug.DrawRay(rayStart, rayDirection * CourseCheckRayDistance, rayColor, Time.fixedDeltaTime);
+        }
     }
     
     /// <summary>

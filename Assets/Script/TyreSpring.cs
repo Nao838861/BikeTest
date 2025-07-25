@@ -44,6 +44,7 @@ public class TyreSpring : MonoBehaviour
     [Header("レイキャスト設定")]
     [Tooltip("地面検出用のレイヤーマスク")]
     public LayerMask GroundLayer;
+    public LayerMask GroundLayer2;
     [Tooltip("タイヤの半径")]
     public float TyreRadius = 0.4f;
     
@@ -312,7 +313,7 @@ public class TyreSpring : MonoBehaviour
             -transform.up,
             out HitInfo,
             MaxLength + TyreRadius,
-            GroundLayer
+            GroundLayer | GroundLayer2
         );
         
         if (IsGrounded)

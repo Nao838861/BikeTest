@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 1493427231091642860}
   m_Layer: 0
   m_Name: Cube (2)
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -165,6 +165,9 @@ MonoBehaviour:
   GroundLayer:
     serializedVersion: 2
     m_Bits: 64
+  GroundLayer2:
+    serializedVersion: 2
+    m_Bits: 128
   TyreRadius: 0.3
   TyreModel: {fileID: 6044688090867298132}
   EnableVisualUpdate: 1
@@ -226,7 +229,7 @@ GameObject:
   - component: {fileID: 4740428430969392435}
   m_Layer: 0
   m_Name: Cube (3)
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -483,6 +486,9 @@ MonoBehaviour:
   GroundLayer:
     serializedVersion: 2
     m_Bits: 64
+  GroundLayer2:
+    serializedVersion: 2
+    m_Bits: 128
   TyreRadius: 0.3
   TyreModel: {fileID: 2499275459191058588}
   EnableVisualUpdate: 1
@@ -574,7 +580,7 @@ GameObject:
   - component: {fileID: 281138336621704981}
   m_Layer: 0
   m_Name: Bike
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -683,6 +689,14 @@ MonoBehaviour:
   ShowDebugInfo: 1
   ShowForceVectors: 1
   ForceVectorScale: 0.1
+  ShowSpeedometer: 1
+  ShowTurboGauge: 1
+  SpeedTextColor: {r: 1, g: 1, b: 1, a: 1}
+  TurboGaugeColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  CourseCheckRayDistance: 50
+  CourseLayerName: BG
+  ShowCourseCheckDebug: 0
+  IsOnCourse: 1
   GroundNormal: {x: 0, y: 1, z: 0}
   EnableSelfSteer: 1
   EnableCasterEffect: 1
@@ -1083,7 +1097,7 @@ GameObject:
   - component: {fileID: 3210526964379487555}
   m_Layer: 0
   m_Name: Cube (1)
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
