@@ -1310,7 +1310,7 @@ public class Bike : MonoBehaviour
             float centrifugalInfluence = speedFactor * MaxCentrifugalInfluence;
             
             // 地形の法線を考慮した上向きベクトルを計算
-            Vector3 terrainUpVector = GroundNormal;
+            Vector3 terrainUpVector = worldUp;// GroundNormal;
             
             // 遠心力方向と地形法線を考慮した目標上向きベクトルを計算
             Vector3 centrifugalUpVector = Vector3.Lerp(terrainUpVector, centrifugalDir, centrifugalInfluence).normalized;

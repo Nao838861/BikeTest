@@ -92,7 +92,7 @@ public class BikeCamera : MonoBehaviour
             {
                 // 速度ベクトルの方向を正規化
                 Vector3 velocityDirection = velocity.normalized;
-                velocityDirection.y *= 0.4f;
+                velocityDirection.y *= 0.2f;
                 
                 // 速度ベクトルの方向に基づいてカメラの位置を計算
                 // 速度の逆方向にオフセットを適用
