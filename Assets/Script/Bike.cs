@@ -405,6 +405,9 @@ public class Bike : MonoBehaviour
     [Tooltip("リセット時の速度リセットの強さ")]
     public float ResetVelocityDamping = 0.9f;
     
+    // リセットボタンの連打防止用フラグ
+    private bool isResetButtonPressed = false;
+    
     [Header("ターボゲージ設定")]
     [Tooltip("ターボゲージの最大値")]
     public float MaxTurboGauge = 100f;
@@ -426,12 +429,21 @@ public class Bike : MonoBehaviour
         bool driftInput = Input.GetButton("Fire4");     // ドリフト
         
         // Resetボタンの入力を取得
-        bool resetInput = Input.GetButtonDown("Reset");  // Resetボタン（デフォルトではSpaceキー）
+        bool resetInput = Input.GetButton("Reset");  // Resetボタン（デフォルトではSpaceキー）
         
-        // Resetボタンが押されたらバイクをリセット
-        if (resetInput)
+        // Resetボタンの処理
+        // ボタンが押されているかどうかを確認
+        if (resetInput && !isResetButtonPressed)
         {
+            // ボタンが押されておらず、新たに押された場合のみリセットを実行
             ResetBike();
+            // フラグをセットして連打を防止
+            isResetButtonPressed = true;
+        }
+        else if (!resetInput)
+        {
+            // ボタンが離されたらフラグをリセット
+            isResetButtonPressed = false;
         }
         
         // ドリフトモードの切り替え
