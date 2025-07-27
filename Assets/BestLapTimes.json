@@ -2,11 +2,11 @@
     "Records": [
         {
             "CourseName": "SampleScene",
-            "BestTime": 56.780433654785159
+            "BestTime": 55.44807815551758
         },
         {
             "CourseName": "TerrainScene",
-            "BestTime": 135.563232421875
+            "BestTime": 131.929443359375
         }
     ]
 }

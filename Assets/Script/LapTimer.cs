@@ -22,6 +22,9 @@ public class LapTimer : MonoBehaviour
     [Tooltip("スタートオブジェクトのタグ名")]
     public string StartObjectTag = "Player";
     
+    [Tooltip("コース外走行時の時間加算倍率")]
+    public float CourseOutTimePenalty = 10.0f;
+    
     [Header("バイク参照設定")]
     [Tooltip("バイクの参照（コース外判定に使用）")]
     public Bike BikeReference;
@@ -116,21 +119,24 @@ public class LapTimer : MonoBehaviour
             if (!wasOnCourse != isCourseOut && isCourseOut)
             {
                 Debug.Log("コースアウトを検出しました");
-                
-                // コースアウト時にラップを無効化
-                if (isTimerRunning)
-                {
-                    lapInvalidated = true;
-                    Debug.Log("現在のラップを無効化しました");
-                }
+                Debug.Log($"コース外走行中は時間が{CourseOutTimePenalty}倍速く進みます");
             }
         }
         
         // タイマーが動いている場合は経過時間を更新
         // ラップが無効化されていない場合のみ更新
-        if (isTimerRunning && !isCourseOut && !lapInvalidated)
+        if (isTimerRunning && !lapInvalidated)
         {
-            currentLapTime = Time.time - lapStartTime;
+            // コース外の場合は時間を倍率で加算
+            float deltaTime = Time.deltaTime;
+            if (isCourseOut)
+            {
+                // コース外の場合は指定倍率で時間を加算
+                deltaTime *= CourseOutTimePenalty;
+            }
+            
+            // 現在のラップタイムに加算
+            currentLapTime += deltaTime;
         }
     }
     
@@ -278,7 +284,7 @@ public class LapTimer : MonoBehaviour
         currentLapTime = 0.0f;
         lapStartTime = 0.0f;
         lastStartLineTime = 0.0f;
-        currentLap = 0;
+        currentLap = 1; // 1から開始するように変更
         lapTimes.Clear();
         bestLapTime = float.MaxValue;
     }
@@ -416,7 +422,7 @@ public class LapTimer : MonoBehaviour
             GUI.Label(new Rect(x, y, 300, 30), "コースアウト!", warningStyle);
             y += 30;
             
-            GUI.Label(new Rect(x, y, 300, 20), "ラップタイム計測停止", 
+            GUI.Label(new Rect(x, y, 300, 20), "ペナルティ：タイムの加算速度10倍", 
                 new GUIStyle() { fontSize = FontSize, normal = { textColor = Color.yellow } });
             y += 30;
         }
@@ -444,7 +450,9 @@ public class LapTimer : MonoBehaviour
         for (int i = lapTimes.Count - 1; i >= 0; i--)
         {
             float lapTime = lapTimes[i];
-            string lapText = $"Lap {currentLap - (lapTimes.Count - 1 - i)}: {FormatTime(lapTime)}";
+            // ラップ番号は1から始まるように計算
+            int lapNumber = i + 1;
+            string lapText = $"Lap {lapNumber}: {FormatTime(lapTime)}";
             
             // 最速ラップは強調表示
             if (Mathf.Approximately(lapTime, bestLapTime))
