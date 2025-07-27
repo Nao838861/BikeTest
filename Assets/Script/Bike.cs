@@ -131,7 +131,7 @@ public class Bike : MonoBehaviour
     
     [Header("コース判定設定")]
     [Tooltip("コース判定用のレイキャスト距離")]
-    public float CourseCheckRayDistance = 5.0f;
+    public float CourseCheckRayDistance = 100.0f;
     [Tooltip("コースとして認識するレイヤー名")]
     public string CourseLayerName = "BG";
     [Tooltip("コース外判定の表示をデバッグ表示するかどうか")]

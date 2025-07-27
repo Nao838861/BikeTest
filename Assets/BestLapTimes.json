@@ -1,0 +1,12 @@
+{
+    "Records": [
+        {
+            "CourseName": "SampleScene",
+            "BestTime": 56.780433654785159
+        },
+        {
+            "CourseName": "TerrainScene",
+            "BestTime": 135.563232421875
+        }
+    ]
+}

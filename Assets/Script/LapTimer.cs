@@ -1,6 +1,9 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+using System.IO;
+using System;
 
 /// <summary>
 /// ラップタイム計測と表示を行うクラス
@@ -22,6 +25,30 @@ public class LapTimer : MonoBehaviour
     [Header("バイク参照設定")]
     [Tooltip("バイクの参照（コース外判定に使用）")]
     public Bike BikeReference;
+    
+    [Header("データ保存設定")]
+    [Tooltip("最速ラップタイムをローカルに保存するかどうか")]
+    public bool EnableSaveBestLapTime = true;
+    
+    [Tooltip("コース名（未設定の場合はシーン名を使用）")]
+    public string CourseName = "";
+    
+    [Tooltip("保存ファイル名（拡張子なし）")]
+    public string SaveFileName = "BestLapTimes";
+    
+    // ラップタイムデータを保存するためのクラス
+    [Serializable]
+    private class LapTimeData
+    {
+        public List<CourseRecord> Records = new List<CourseRecord>();
+    }
+    
+    [Serializable]
+    private class CourseRecord
+    {
+        public string CourseName;
+        public float BestTime;
+    }
     
     [Header("表示設定")]
     [Tooltip("表示位置のX座標オフセット")]
@@ -64,13 +91,15 @@ public class LapTimer : MonoBehaviour
     // 初期化
     void Start()
     {
-        // ラップタイム履歴を初期化
-        lapTimes = new List<float>();
-        
         // タイマー状態をリセット
         ResetTimer();
+        
+        // 保存された最速ラップタイムを読み込む
+        if (EnableSaveBestLapTime)
+        {
+            LoadBestLapTime();
+        }
     }
-    
     // 毎フレーム更新
     void Update()
     {
@@ -106,6 +135,141 @@ public class LapTimer : MonoBehaviour
     }
     
     /// <summary>
+    /// 現在のコース名を取得する
+    /// </summary>
+    private string GetCurrentCourseName()
+    {
+        // CourseNameが設定されていればそれを使用、そうでなければシーン名を使用
+        return string.IsNullOrEmpty(CourseName) ? SceneManager.GetActiveScene().name : CourseName;
+    }
+    
+    /// <summary>
+    /// JSONファイルのパスを取得する
+    /// </summary>
+    private string GetJsonFilePath()
+    {
+        // 実行ファイルがあるディレクトリに保存
+        return Path.Combine(Application.dataPath, $"{SaveFileName}.json");
+    }
+    
+    /// <summary>
+    /// 最速ラップタイムをJSONファイルに保存する
+    /// </summary>
+    private void SaveBestLapTimeToFile()
+    {
+        if (!EnableSaveBestLapTime || bestLapTime == float.MaxValue) return;
+        
+        string courseName = GetCurrentCourseName();
+        string filePath = GetJsonFilePath();
+        
+        // 既存のデータを読み込むか、新規作成
+        LapTimeData lapTimeData = new LapTimeData();
+        
+        if (File.Exists(filePath))
+        {
+            try
+            {
+                string json = File.ReadAllText(filePath);
+                lapTimeData = JsonUtility.FromJson<LapTimeData>(json) ?? new LapTimeData();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"ファイルの読み込みエラー: {ex.Message}");
+                lapTimeData = new LapTimeData();
+            }
+        }
+        
+        // 既存の記録を探す
+        CourseRecord existingRecord = null;
+        foreach (var record in lapTimeData.Records)
+        {
+            if (record.CourseName == courseName)
+            {
+                existingRecord = record;
+                break;
+            }
+        }
+        
+        // 記録がないか、より速いタイムの場合は更新
+        if (existingRecord == null)
+        {
+            // 新しいコースの記録を追加
+            CourseRecord newRecord = new CourseRecord
+            {
+                CourseName = courseName,
+                BestTime = bestLapTime
+            };
+            lapTimeData.Records.Add(newRecord);
+            
+            try
+            {
+                // JSONに変換して保存
+                string json = JsonUtility.ToJson(lapTimeData, true); // trueで整形されたJSONを出力
+                File.WriteAllText(filePath, json);
+                Debug.Log($"新しい最速ラップタイムを保存しました: {courseName} - {FormatTime(bestLapTime)}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"ファイルの保存エラー: {ex.Message}");
+            }
+        }
+        else if (bestLapTime < existingRecord.BestTime)
+        {
+            // 既存の記録を更新
+            existingRecord.BestTime = bestLapTime;
+            
+            try
+            {
+                // JSONに変換して保存
+                string json = JsonUtility.ToJson(lapTimeData, true);
+                File.WriteAllText(filePath, json);
+                Debug.Log($"新しい最速ラップタイムを保存しました: {courseName} - {FormatTime(bestLapTime)}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"ファイルの保存エラー: {ex.Message}");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 保存された最速ラップタイムをJSONファイルから読み込む
+    /// </summary>
+    private void LoadBestLapTime()
+    {
+        string courseName = GetCurrentCourseName();
+        string filePath = GetJsonFilePath();
+        
+        // ファイルが存在すれば読み込む
+        if (File.Exists(filePath))
+        {
+            try
+            {
+                string json = File.ReadAllText(filePath);
+                LapTimeData lapTimeData = JsonUtility.FromJson<LapTimeData>(json);
+                
+                if (lapTimeData != null)
+                {
+                    // 対象コースの記録を探す
+                    foreach (var record in lapTimeData.Records)
+                    {
+                        if (record.CourseName == courseName)
+                        {
+                            bestLapTime = record.BestTime;
+                            Debug.Log($"保存された最速ラップタイムを読み込みました: {courseName} - {FormatTime(bestLapTime)}");
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"ファイルの読み込みエラー: {ex.Message}");
+            }
+        }
+    }
+    
+    /// <summary>
     /// タイマーをリセットする
     /// </summary>
     public void ResetTimer()
@@ -132,37 +296,43 @@ public class LapTimer : MonoBehaviour
     }
     
     /// <summary>
-    /// ラップを完了する
+    /// ラップを完了し、記録を更新する
     /// </summary>
-    public void CompleteLap()
+    private void CompleteLap()
     {
-        if (!isTimerRunning) return;
-        
-        // 現在のラップタイムを記録
-        float lapTime = currentLapTime;
-        
-        // ラップタイムをリストに追加
-        lapTimes.Add(lapTime);
-        
-        // 最大ラップ数を超えた場合、古いものを削除
-        if (lapTimes.Count > MaxLapCount)
+        // ラップタイムが最小ラップタイムより大きい場合のみ記録
+        if (currentLapTime >= MinimumLapTime && !lapInvalidated)
         {
-            lapTimes.RemoveAt(0);
+            // ラップタイムを記録
+            lapTimes.Add(currentLapTime);
+            
+            // 最速ラップタイムを更新
+            if (currentLapTime < bestLapTime)
+            {
+                bestLapTime = currentLapTime;
+                Debug.Log($"新しい最速ラップタイム: {FormatTime(bestLapTime)}");
+                
+                // 最速ラップタイムをローカルに保存
+                if (EnableSaveBestLapTime)
+                {
+                    SaveBestLapTimeToFile();
+                }
+            }
+            
+            Debug.Log($"ラップ完了: {FormatTime(currentLapTime)}");
+        }
+        else if (lapInvalidated)
+        {
+            Debug.Log("無効化されたラップのため、記録されませんでした");
+            lapInvalidated = false; // 次のラップのためにリセット
+        }
+        else
+        {
+            Debug.Log($"ラップタイムが短すぎるため記録されませんでした: {FormatTime(currentLapTime)}");
         }
         
-        // 最速ラップタイムを更新
-        if (lapTime < bestLapTime)
-        {
-            bestLapTime = lapTime;
-        }
-        
-        // ラップカウントを増やす
-        currentLap++;
-        
-        // 次のラップのためにタイマーをリセット
-        lapStartTime = Time.time;
-        lastStartLineTime = Time.time;
-        currentLapTime = 0.0f;
+        // 新しいラップを開始
+        StartTimer();
     }
     
     /// <summary>
@@ -240,12 +410,13 @@ public class LapTimer : MonoBehaviour
         float x = DisplayOffsetX;
         float y = DisplayOffsetY;
         
-        if (isTimerRunning && isCourseOut)
+        // コースアウトか、またはラップが無効化されている場合に警告表示
+        if (isTimerRunning && (isCourseOut || lapInvalidated))
         {
             GUI.Label(new Rect(x, y, 300, 30), "コースアウト!", warningStyle);
             y += 30;
             
-            GUI.Label(new Rect(x, y, 300, 20), "コースに戻ってください", 
+            GUI.Label(new Rect(x, y, 300, 20), "ラップタイム計測停止", 
                 new GUIStyle() { fontSize = FontSize, normal = { textColor = Color.yellow } });
             y += 30;
         }
